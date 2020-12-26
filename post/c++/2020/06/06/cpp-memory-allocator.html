@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Memory allocation - Lenox&nbsp;Xian</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans SC:300,400,700" type="text/css">
+  <link rel="stylesheet" href="/static/app.css" type="text/css">
+  <link rel="stylesheet" href="/static/syntax.css" type="text/css">
+</head>
+
+<body>
+  <header>
+    <h1>Lenox&nbsp;Xian</h1>
+    <p>Everything negative-pressure，challenges-is all an opportunity for me to rise</p>
+  </header>
+
+  <div class="post_content">
+    <h2>Memory allocation</h2>
+    <p class="date">06 June 2020</p>
+
+    <blockquote>
+  <p>这篇文章讨论一下c++中的内存分配技术</p>
+</blockquote>
+
+<p>当我们想要在堆（heap）中分配一块内存区域并初始化一个对象的时候，我们会想到使用<em>new 表达式</em>，比如：</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre><span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="o">*</span><span class="n">sp</span> <span class="o">=</span> <span class="k">new</span> <span class="nf">string</span><span class="p">(</span><span class="s">"Bob"</span><span class="p">);</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>这里我们分析一下这句<em>new 表达式</em>执行了哪几个步骤</p>
+
+<ol>
+  <li>首先<em>new 表达式</em>会调用一个名为<code class="language-plaintext highlighter-rouge">operator new</code>的标准库函数，这个函数声明在<em>new</em>头文件下，这个函数会分配一块足够大，原始，未命名的内存空间用来存储特定类型的对象，这里指<code class="language-plaintext highlighter-rouge">string</code>对象。</li>
+  <li>接着，编译器会执行相应的构造函数以构造这些对象，并传入初始值。</li>
+  <li>最后，将第2步中创建的对象分配到第1步中分配的内存空间中，然后返回一个指向该对象的指针。</li>
+</ol>
+
+<p>对应的，为了防止内存被消耗殆尽，当不再需要这个动态对象时，我们需要显示的销毁它，并释放与之关联的内存，我们会想到使用<em>delete 表达式</em>，比如：</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre><span class="k">delete</span> <span class="n">sp</span><span class="p">;</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>同样，我们分析以下这句<em>delete 表达式</em>执行了哪几个步骤</p>
+
+<ol>
+  <li>对<code class="language-plaintext highlighter-rouge">sp</code>所指向的对象执行对应的<em>析构函数</em>，以销毁这个动态对象。</li>
+  <li>编译器调用名为<code class="language-plaintext highlighter-rouge">operator delete</code>的标准库函数释放内存空间，这个函数声明在<em>new</em>头文件下。</li>
+</ol>
+
+<p>这里我们猜想这两个标准库函数可能是是这样实现的：</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre></td><td class="rouge-code"><pre> <span class="kt">void</span> <span class="o">*</span><span class="k">operator</span> <span class="nf">new</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span> <span class="n">size</span><span class="p">)</span> <span class="p">{</span>  
+    <span class="k">if</span> <span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">mem</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">malloc</span><span class="p">(</span><span class="n">size</span><span class="p">))</span>  
+        <span class="k">return</span> <span class="n">mem</span><span class="p">;</span>  
+    <span class="k">else</span>  
+ <span class="k">throw</span> <span class="n">std</span><span class="o">::</span><span class="n">bad_alloc</span><span class="p">();</span>  
+<span class="p">}</span>
+
+<span class="kt">void</span> <span class="k">operator</span> <span class="nf">delete</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">mem</span><span class="p">)</span> <span class="k">noexcept</span> <span class="p">{</span>  
+    <span class="n">std</span><span class="o">::</span><span class="n">free</span><span class="p">(</span><span class="n">mem</span><span class="p">);</span>  
+<span class="err">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>现在<em>new 表达式</em>是将内存分配和初始化结合到一起，<em>delete 表达式</em>是将对象销毁和释放内存结合到一起。但是有些场景下我们需要分开处理，那怎么办呢？我们以一个例子来说明：
+ 在这个例子中我们需要分配两块连续的内存区域存储<code class="language-plaintext highlighter-rouge">std::uint8_t</code>类型的数据，这种类型占8bit（1B）：</p>
+
+<p>### 使用std::allocator（allocator类是标准库的一部分）</p>
+
+<p>首先分配两块内存区域，大小为<code class="language-plaintext highlighter-rouge">2 * sizeof(std::uint8_t)</code>，也就是2个字节；</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre><span class="k">auto</span> <span class="n">allocator</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">allocator</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="p">();</span>  
+<span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span> <span class="o">*</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">allocator</span><span class="p">.</span><span class="n">allocate</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p><code class="language-plaintext highlighter-rouge">ptr</code>指向第一块内存区域，地址为0x0000000000a912c0，内存图如下表示：</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>0x0000000000a912c0  00 00 00 00   00 00 00 00   00 00 00 00   00 00 00 00
+0x0000000000a912d0  00 00 00 00   00 00 00 00   00 00 00 00   00 00 00 00
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>现在我们向两块内存区域分配对象，第一块内存存储值为<code class="language-plaintext highlighter-rouge">0xFF</code>的<code class="language-plaintext highlighter-rouge">uint8_t</code>对象，第二块内存存储值为<code class="language-plaintext highlighter-rouge">0xEE</code>的<code class="language-plaintext highlighter-rouge">uint8_t</code>对象。</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre><span class="n">allocator</span><span class="p">.</span><span class="n">construct</span><span class="p">(</span><span class="n">ptr</span><span class="p">,</span> <span class="mh">0xFF</span><span class="p">);</span>  
+<span class="n">allocator</span><span class="p">.</span><span class="n">construct</span><span class="p">(</span><span class="n">ptr</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="mh">0xEE</span><span class="p">);</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>现在，内存图如下表示：</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>0x0000000000a912c0  ff ee 00 00   00 00 00 00   00 00 00 00   00 00 00 00
+0x0000000000a912d0  00 00 00 00   00 00 00 00   00 00 00 00   00 00 00 00
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>可见对象在内存中构造成功。
+其实，除了这种方式构造动态对象外，还可以使用<em>定位 new ( placement new))</em>形式构造对象</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre><span class="k">new</span><span class="p">(</span><span class="n">ptr</span><span class="p">)</span> <span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="p">(</span><span class="mh">0xFF</span><span class="p">);</span>  
+<span class="k">new</span><span class="p">(</span><span class="n">ptr</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="p">(</span><span class="mh">0xEE</span><span class="p">);</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>或者使用*解引用符**</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre><span class="o">*</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="p">(</span><span class="mh">0xFF</span><span class="p">);</span>  
+<span class="o">*</span><span class="p">(</span><span class="n">ptr</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="kt">uint8_t</span><span class="p">(</span><span class="mh">0xEE</span><span class="p">);</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>当我们想销毁某个内存空间上的对象时，可以这样子</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre><span class="n">allocator</span><span class="p">.</span><span class="n">destroy</span><span class="p">(</span><span class="n">ptr</span><span class="p">);</span>
+<span class="n">or</span>
+<span class="n">ptr</span><span class="o">-&gt;~</span><span class="kt">uint8_t</span><span class="p">();</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>这样就可以清除给定的对象但是不会释放该对象所在的空间。如果需要的话，我们可以重新使用该空间。
+最后当我们不再需要这些动态对象的时候，我们除了销毁他们，还需要释放其所在的内存空间，这是很重要的。</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre><span class="n">allocator</span><span class="p">.</span><span class="n">deallocate</span><span class="p">(</span><span class="n">ptr</span><span class="p">,</span> <span class="mi">2</span><span class="p">);</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>### std::allocator的最终原理？
+ allocator其实就是借助标准库的<code class="language-plaintext highlighter-rouge">operator new</code>和<code class="language-plaintext highlighter-rouge">operator delete</code>函数来完成内存分配和销毁的。</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre></td><td class="rouge-code"><pre>      <span class="c1">// NB: __n is permitted to be 0.  The C++ standard says nothing  </span>
+ <span class="c1">// about what the return value is when __n == 0.  _GLIBCXX_NODISCARD _Tp*  </span>
+      <span class="n">allocate</span><span class="p">(</span><span class="n">size_type</span> <span class="n">__n</span><span class="p">,</span> <span class="k">const</span> <span class="kt">void</span><span class="o">*</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="k">const</span> <span class="kt">void</span><span class="o">*&gt;</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>  
+      <span class="p">{</span>  
+   <span class="k">if</span> <span class="p">(</span><span class="n">__n</span> <span class="o">&gt;</span> <span class="k">this</span><span class="o">-&gt;</span><span class="n">_M_max_size</span><span class="p">())</span>  
+     <span class="n">std</span><span class="o">::</span><span class="n">__throw_bad_alloc</span><span class="p">();</span>  
+  
+<span class="cp">#if __cpp_aligned_new  
+</span>   <span class="k">if</span> <span class="p">(</span><span class="k">alignof</span><span class="p">(</span><span class="n">_Tp</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">__STDCPP_DEFAULT_NEW_ALIGNMENT__</span><span class="p">)</span>  
+ <span class="p">{</span> <span class="n">std</span><span class="o">::</span><span class="n">align_val_t</span> <span class="n">__al</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">align_val_t</span><span class="p">(</span><span class="k">alignof</span><span class="p">(</span><span class="n">_Tp</span><span class="p">));</span> <span class="k">return</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="n">_Tp</span><span class="o">*&gt;</span><span class="p">(</span><span class="o">::</span><span class="k">operator</span> <span class="k">new</span><span class="p">(</span><span class="n">__n</span> <span class="o">*</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">_Tp</span><span class="p">),</span> <span class="n">__al</span><span class="p">));</span> <span class="p">}</span><span class="err">#</span><span class="n">endif</span>  
+  <span class="k">return</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="n">_Tp</span><span class="o">*&gt;</span><span class="p">(</span><span class="o">::</span><span class="k">operator</span> <span class="k">new</span><span class="p">(</span><span class="n">__n</span> <span class="o">*</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">_Tp</span><span class="p">)));</span>  
+      <span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+</pre></td><td class="rouge-code"><pre>      <span class="c1">// __p is not permitted to be a null pointer.  </span>
+  <span class="kt">void</span>  
+  <span class="nf">deallocate</span><span class="p">(</span><span class="n">_Tp</span><span class="o">*</span> <span class="n">__p</span><span class="p">,</span> <span class="n">size_type</span> <span class="n">__t</span><span class="p">)</span>  
+      <span class="p">{</span>  
+<span class="cp">#if __cpp_aligned_new  
+</span>   <span class="k">if</span> <span class="p">(</span><span class="k">alignof</span><span class="p">(</span><span class="n">_Tp</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">__STDCPP_DEFAULT_NEW_ALIGNMENT__</span><span class="p">)</span>  
+ <span class="p">{</span> <span class="o">::</span><span class="k">operator</span> <span class="k">delete</span><span class="p">(</span><span class="n">__p</span><span class="p">,</span><span class="err">#</span> <span class="k">if</span> <span class="n">__cpp_sized_deallocation</span>  
+ <span class="n">__t</span> <span class="o">*</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">_Tp</span><span class="p">),</span><span class="err">#</span> <span class="n">endif</span>  
+ <span class="n">std</span><span class="o">::</span><span class="n">align_val_t</span><span class="p">(</span><span class="k">alignof</span><span class="p">(</span><span class="n">_Tp</span><span class="p">)));</span> <span class="k">return</span><span class="p">;</span> <span class="p">}</span><span class="err">#</span><span class="n">endif</span>  
+  <span class="o">::</span><span class="k">operator</span> <span class="k">delete</span><span class="p">(</span><span class="n">__p</span>  
+<span class="cp">#if __cpp_sized_deallocation  
+</span>  <span class="p">,</span> <span class="n">__t</span> <span class="o">*</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">_Tp</span><span class="p">)</span>  
+<span class="cp">#endif  
+</span>  <span class="p">);</span>  
+      <span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>至于销毁对象的<code class="language-plaintext highlighter-rouge">destory</code>方法，其本质也是调用该对象的<em>析构函数</em>完成的。</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td><td class="rouge-code"><pre>     <span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="nc">_Up</span><span class="p">&gt;</span>  
+<span class="kt">void</span>  
+<span class="nf">destroy</span><span class="p">(</span><span class="n">_Up</span><span class="o">*</span> <span class="n">__p</span><span class="p">)</span>  
+<span class="k">noexcept</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">is_nothrow_destructible</span><span class="o">&lt;</span><span class="n">_Up</span><span class="o">&gt;::</span><span class="n">value</span><span class="p">)</span>  
+<span class="p">{</span> <span class="n">__p</span><span class="o">-&gt;~</span><span class="n">_Up</span><span class="p">();</span> <span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>调用<em>析构函数</em>会销毁对象，但是不会释放内存。
+<!--stackedit_data:
+eyJoaXN0b3J5IjpbLTE2NjM2ODM5MTEsLTg1NTIyMDk4MCwtMj
+A4NDM0MDc1XX0=
+--></p>
+
+
+    <p class="signature">&mdash; Lenox&nbsp;Xian</p>
+  </div>
+  </script>
+</body>
+
+</html>

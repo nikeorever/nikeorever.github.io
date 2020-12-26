@@ -1,14 +1,37 @@
----
-title: Posts
-layout: default
-tab: posts
----
+<!DOCTYPE html>
 
-<ul>
-    {% for post in site.categories.post %}
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Posts - Lenox&nbsp;Xian</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans SC:300,400,700" type="text/css">
+  <link rel="stylesheet" href="/static/app.css" type="text/css">
+</head>
+
+<body>
+  <header>
+    <h1>Lenox&nbsp;Xian</h1>
+    <p>Everything negative-pressure，challenges-is all an opportunity for me to rise</p>
+  </header>
+
+  <div class="content">
+    <ul>
+    
       <li>
-        <a id="title" href="{{post.url}}">{{post.title}}</a><br>
-        <a id="category">{{post.category}}</a>&nbsp;&nbsp;&nbsp;&nbsp;<a class="date">{{ post.date | date: "%Y-%m-%d" }}</a><br>
+        <a id="title" href="/post/java/2020/09/09/java-generics-covariant-contravariance.html">Covariance and contravariance</a><br>
+        <a id="category">Java</a>&nbsp;&nbsp;&nbsp;&nbsp;<a class="date">2020-09-09</a><br>
       </li>
-    {% endfor %}
+    
+      <li>
+        <a id="title" href="/post/c++/2020/06/06/cpp-memory-allocator.html">Memory allocation</a><br>
+        <a id="category">C++</a>&nbsp;&nbsp;&nbsp;&nbsp;<a class="date">2020-06-06</a><br>
+      </li>
+    
 </ul>
+  </div>
+</body>
+
+</html>

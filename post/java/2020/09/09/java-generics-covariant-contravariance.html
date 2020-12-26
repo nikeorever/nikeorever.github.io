@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Covariance and contravariance - Lenox&nbsp;Xian</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans SC:300,400,700" type="text/css">
+  <link rel="stylesheet" href="/static/app.css" type="text/css">
+  <link rel="stylesheet" href="/static/syntax.css" type="text/css">
+</head>
+
+<body>
+  <header>
+    <h1>Lenox&nbsp;Xian</h1>
+    <p>Everything negative-pressure，challenges-is all an opportunity for me to rise</p>
+  </header>
+
+  <div class="post_content">
+    <h2>Covariance and contravariance</h2>
+    <p class="date">09 September 2020</p>
+
+    <blockquote>
+  <p>这里讨论一下Java中的泛型(Generics)，重点说明协变(covariant)和逆变(contravariance)</p>
+</blockquote>
+
+<p>首先，在Java中，泛型类型是不变（invariant）的，这意味这<code class="language-plaintext highlighter-rouge">List&lt;String&gt;</code>并不是<code class="language-plaintext highlighter-rouge">List&lt;Object&gt;</code>的子类。并且使用有界通配符（bounded wildcards）可以增加API的灵活性。
+为了方便下面讨论，我们这里定义3个有继承关系的类：Animal，Cat，Dog</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre><span class="kd">class</span> <span class="nc">Animal</span> <span class="o">{}</span>
+<span class="kd">class</span> <span class="nc">Cat</span> <span class="kd">extends</span> <span class="nc">Animal</span> <span class="o">{}</span>
+<span class="kd">class</span> <span class="nc">Dog</span> <span class="kd">extends</span> <span class="nc">Animal</span> <span class="o">{}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="协变covariant">协变(covariant)</h3>
+<p>首先我们查看一下<code class="language-plaintext highlighter-rouge">Collection</code>的<code class="language-plaintext highlighter-rouge">addAll</code>的方法签名：</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre><span class="kd">class</span> <span class="nc">Collection</span><span class="o">&lt;</span><span class="no">E</span><span class="o">&gt;</span> <span class="o">{</span>
+	<span class="kt">boolean</span> <span class="nf">addAll</span><span class="o">(</span><span class="nc">Collection</span><span class="o">&lt;?</span> <span class="kd">extends</span> <span class="no">E</span><span class="o">&gt;</span> <span class="n">c</span><span class="o">);</span>
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>将<code class="language-plaintext highlighter-rouge">addAll</code>的参数类型定义成<code class="language-plaintext highlighter-rouge">Collection&lt;? extends E&gt;</code>而非<code class="language-plaintext highlighter-rouge">Collection&lt;E&gt;</code>的好处在于可以让这个方法接受类型为<code class="language-plaintext highlighter-rouge">E</code>或<code class="language-plaintext highlighter-rouge">E</code>的子类型的<code class="language-plaintext highlighter-rouge">Collection</code>，这样极大的增加了API的灵活性，这也是符合逻辑的，比如说我们定义了<code class="language-plaintext highlighter-rouge">Collection&lt;Animal&gt;</code>这样一个动物集合，那其实<em>猫集合</em>和<em>狗集合</em>都是可以添加进<em>动物集合</em>的。一个很重要的点是，我们对这样一个带有上边界（extends-bound）的通配符的集合（Collection&lt;? extends Animal&gt;）只能读（read），不能写（write），为什么呢？我们上面说过，<code class="language-plaintext highlighter-rouge">addAll</code>支持接受<em>猫集合</em>，<em>狗集合</em>等其他动物集合，那作为一个通用方法，如果我们支持写的话，那我们写（write）什么动物呢？<em>写（write）</em>猫，如果传递进来的是狗集合那就会发生类型不匹配，所以，我们仅仅能从<code class="language-plaintext highlighter-rouge">Collection&lt;? extends Animal&gt;</code>知道，这个集合里的元素都是<code class="language-plaintext highlighter-rouge">Animal</code>，这是一定不会有问题的，所以对于这样类型的参数，我们只支持<em>读（read）</em>。</p>
+
+<p>这样我们有个清晰的理解：虽然Collection<Cat>不是Collection<Animal>的子类型，但Collection<Cat>是Collection&lt;? extends Animal&gt;的子类型，换句话说，带有上边界的通配符使这个类型发生了协变（the wildcard with an extends-bound (upper bound) makes the type covariant）。</Cat></Animal></Cat></p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre><span class="kt">void</span> <span class="nf">covariant</span><span class="o">(</span><span class="nc">List</span><span class="o">&lt;?</span> <span class="kd">extends</span> <span class="nc">Animal</span><span class="o">&gt;</span> <span class="n">items</span><span class="o">)</span> <span class="o">{</span>  
+  <span class="nc">Animal</span> <span class="n">first</span> <span class="o">=</span> <span class="n">items</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="mi">0</span><span class="o">);</span>  
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="逆变contravariance">逆变(contravariance)</h3>
+<p><code class="language-plaintext highlighter-rouge">Collection&lt;? super Dog&gt;</code>，这中类型匹配所有泛型类型是Dog及其超类的集合类型，如<code class="language-plaintext highlighter-rouge">Collection&lt;Dog&gt;</code>，<code class="language-plaintext highlighter-rouge">Collection&lt;Animal&gt;</code>，<code class="language-plaintext highlighter-rouge">Collection&lt;Object&gt;</code>。一个很重要的点是，对于发生逆变(contravariance)的类型，我们既可以对其<em>读（read）</em>也可以对其<em>写（write）</em>，但是：读（read）的类型是<code class="language-plaintext highlighter-rouge">Object</code>，而不是<code class="language-plaintext highlighter-rouge">Dog</code>，因为我们并不知具体是<code class="language-plaintext highlighter-rouge">Dog</code>，<code class="language-plaintext highlighter-rouge">Animal</code>还是<code class="language-plaintext highlighter-rouge">Object</code>，我们仅仅知道这些类的共同点，它们有一个共同的超类-<code class="language-plaintext highlighter-rouge">Object</code>；写（write）的类型只支持<code class="language-plaintext highlighter-rouge">Dog</code>类型，因为我们并不知具体是<code class="language-plaintext highlighter-rouge">Dog</code>，<code class="language-plaintext highlighter-rouge">Animal</code>还是<code class="language-plaintext highlighter-rouge">Object</code>，我们仅仅知道这些类的共同点，它们有一个子类-<code class="language-plaintext highlighter-rouge">Dog</code>。</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre></td><td class="rouge-code"><pre><span class="kt">void</span> <span class="nf">contravariance</span><span class="o">(</span><span class="nc">List</span><span class="o">&lt;?</span> <span class="kd">super</span> <span class="nc">Dog</span><span class="o">&gt;</span> <span class="n">items</span><span class="o">)</span> <span class="o">{</span>  
+  <span class="n">items</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="k">new</span> <span class="nc">Dog</span><span class="o">());</span>  
+  <span class="nc">Object</span> <span class="n">first</span> <span class="o">=</span> <span class="n">items</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="mi">0</span><span class="o">);</span>  
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="pecs">PECS</h3>
+<p>这是<em>Producer-Extends, Consumer-Super</em>的缩写，表示从生产者里读（协变(covariant)），写入到消费者（逆变(contravariance)）。</p>
+
+<p>Joshua Bloch recommends：<em>For maximum flexibility, use wildcard types on input parameters that represent producers or consumers, and proposes the following mnemonic: PECS</em>
+<!--stackedit_data:
+eyJoaXN0b3J5IjpbNTc2MDM1MTc0LDk0NzU0NTcwNF19
+--></p>
+
+
+    <p class="signature">&mdash; Lenox&nbsp;Xian</p>
+  </div>
+  </script>
+</body>
+
+</html>
