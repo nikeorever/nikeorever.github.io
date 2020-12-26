@@ -1,0 +1,75 @@
+:root {
+    --background-color: #fff;
+    --foreground-color: #333;
+    --signature-color: #666;
+    --category-color: #aaa;
+    --date-color: #aaa;
+    --header-background-color: hsl(151,44.7%,50%);
+    --header-foreground-color: #fff;
+}
+html {
+    height: 100%;
+}
+body {
+    min-height: 100%;
+    font-family: 'Noto Sans SC';
+    background-color: var(--background-color);
+    color: var(--foreground-color);
+}
+
+li {
+    margin-bottom: 10px;
+}
+
+#title {
+    font-size: 16px;
+    color: hsl(151,44.7%,50%);
+    text-decoration: none;
+}
+#title:hover, #title:active {
+    font-size: 16px;
+    color: hsl(151,44.7%,40%);
+    text-decoration: none;
+}
+#category {
+    font-size: 15px;
+    font-weight: bold;
+    color:var(--category-color);
+}
+.date {
+    font-size: 15px;
+    color: var(--date-color);
+}
+
+
+header {
+    background-color: var(--header-background-color);
+    color: var(--header-foreground-color);
+    padding: 30px;
+}
+header h1 {
+    text-transform: uppercase;
+    font-size: 40px;
+    letter-spacing: 10px;
+}
+header p {
+    font-size: 20px;
+}
+
+p.signature {
+    margin-top: 60px;
+    color: var(--signature-color);
+}
+
+.post_content {
+    padding: 30px;
+    max-width: 1000px;
+    line-height: 22px;
+}
+.post_content h2 {
+    margin-top: 0;
+}
+.post_content p {
+    margin-bottom: 15px;
+}
+  
