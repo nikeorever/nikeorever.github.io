@@ -1,1 +1,1 @@
-# Personal blog power by jekyllrb[https://jekyllrb.com/]
+## Personal blog power by [jekyllrb](https://jekyllrb.com/)
