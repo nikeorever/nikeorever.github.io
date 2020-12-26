@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dsl - Lenox&nbsp;Xian</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans SC:300,400,700" type="text/css">
+  <link rel="stylesheet" href="/static/app.css" type="text/css">
+  <link rel="stylesheet" href="/static/syntax.css" type="text/css">
+</head>
+
+<body>
+  <header>
+    <h1>Lenox&nbsp;Xian</h1>
+    <p>Everything negative-pressure，challenges-is all an opportunity for me to rise</p>
+  </header>
+
+  <div class="post_content">
+    <h2>Dsl</h2>
+    <p class="date">27 June 2020</p>
+
+    <blockquote>
+  <p>相信每个使用过<em>Gradle</em>的人或多或少喜欢上了这种简洁易懂的DSL语法。起初这都得益于<em>Groovy DSL</em>这门动态脚本语言，但随着Kotlin的兴起，其优秀的语法糖也让其支持DSL，现在<em>Gradle</em>也支持<em>Kotlin DSL</em>，而且相比<em>Groovy DSL</em>，IDE也对其更加友好，如代码高亮，智能提示等，现在Google Android Team的Gradle Plugin 也慢慢从<em>Groovy</em> 切换到 <em>Kotlin</em>。现在<em>Kotlin DSL</em> 已经广泛的应用到各个方面，如<em>Android</em>, <em>Gradle</em>等。</p>
+</blockquote>
+
+<h4 id="没有kotlin-dsl的android世界">没有Kotlin DSL的Android世界</h4>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+</pre></td><td class="rouge-code"><pre><span class="n">application</span><span class="p">.</span><span class="nf">registerActivityLifecycleCallbacks</span><span class="p">(</span><span class="kd">object</span> <span class="err">: </span><span class="nc">Application</span><span class="p">.</span><span class="nc">ActivityLifecycleCallbacks</span> <span class="p">{</span>  
+  
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityPaused</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">)</span> <span class="p">{</span>  
+    <span class="p">}</span>  
+  
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityStarted</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">)</span> <span class="p">{</span>  
+    <span class="p">}</span>  
+  
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityDestroyed</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">)</span> <span class="p">{</span>  
+    <span class="p">}</span>  
+  
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivitySaveInstanceState</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">,</span> <span class="n">p1</span><span class="p">:</span> <span class="nc">Bundle</span><span class="p">)</span> <span class="p">{</span>  
+    <span class="p">}</span>  
+  
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityStopped</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">)</span> <span class="p">{</span>  
+    <span class="p">}</span>  
+  
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityCreated</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">,</span> <span class="n">p1</span><span class="p">:</span> <span class="nc">Bundle</span><span class="p">?)</span> <span class="p">{</span>  
+    <span class="p">}</span>  
+  
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityResumed</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">)</span> <span class="p">{</span>  
+    <span class="p">}</span>  
+  
+<span class="p">})</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>相信从事过Android开发的人都很清楚上面的代码的意思：它注册了一个监听全局<code class="language-plaintext highlighter-rouge">Activity</code>生命周期的回调接口，当然，它的回调接口需要包含<code class="language-plaintext highlighter-rouge">Activity</code>全部生命周期回调方法。
+但是有时候我们并不需要<code class="language-plaintext highlighter-rouge">override</code>生命周期中的全部方法，我们可能只需要监听<code class="language-plaintext highlighter-rouge">Activity</code>的创建和销毁，其他不关心，那其实我们只需要<code class="language-plaintext highlighter-rouge">override</code> <code class="language-plaintext highlighter-rouge">fun onActivityCreated(p0: Activity, p1: Bundle?)</code> 和<code class="language-plaintext highlighter-rouge">fun onActivityDestroyed(p0: Activity)</code>，但是由于<code class="language-plaintext highlighter-rouge">ActivityLifecycleCallbacks</code>是一个<code class="language-plaintext highlighter-rouge">interface</code>，首先于语法，我们必须<code class="language-plaintext highlighter-rouge">override</code>所有，即使我们不需要，这对于一个有代码洁癖的人，看到这么多没有内容的空方法是不能接受的，标记为很丑陋的代码。
+这只是Android中的其中之一，向类似这种情况在Android有很多，比如说<code class="language-plaintext highlighter-rouge">TextWatcher</code>，有时候可以在SDK中发现一些抽象类实现了这类接口，然后重写所有抽象方法，然后将其命名为<code class="language-plaintext highlighter-rouge">Default*</code>，这也是一种方式，但并不优雅。</p>
+
+<h4 id="期望中的代码">期望中的代码</h4>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre></td><td class="rouge-code"><pre><span class="n">application</span><span class="p">.</span><span class="nf">registerActivityLifecycleCallbacksDsl</span> <span class="p">{</span>  
+  
+  <span class="nf">onActivityCreated</span> <span class="p">{</span> <span class="n">activity</span><span class="p">,</span> <span class="n">bundle</span> <span class="p">-&gt;</span>    
+  <span class="p">}</span>
+  
+  <span class="nf">onActivityDestroyed</span> <span class="p">{</span> <span class="n">activity</span> <span class="p">-&gt;</span>  
+  <span class="p">}</span>
+ <span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>这样我们只需要在DSL块中调用我们需要的方法，而不用重写所有，这是我们所期望的。</p>
+
+<h4 id="如何实现">如何实现？</h4>
+<p><em>Kotlin DSL</em> 主要借助Kotlin中的高阶函数（ Higher-Order Function ）实现，当然<code class="language-plaintext highlighter-rouge">infix</code>也大量运用于<em>Kotlin DSL</em>中。
+首先我们创建一个<em>DSL 接口</em>，里面包含所有我们在DSL代码块中可以调用的函数，这里只定义一部分作为演示。</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre></td><td class="rouge-code"><pre><span class="kd">interface</span> <span class="nc">ActivityLifecycleCallbacksDsl</span> <span class="p">{</span>  
+    <span class="k">fun</span> <span class="nf">onActivityCreated</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="p">(</span><span class="nc">Activity</span><span class="p">,</span> <span class="nc">Bundle</span><span class="p">?)</span> <span class="p">-&gt;</span> <span class="nc">Unit</span><span class="p">)</span>  
+    <span class="k">fun</span> <span class="nf">onActivityDestroyed</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="p">(</span><span class="nc">Activity</span><span class="p">)</span> <span class="p">-&gt;</span> <span class="nc">Unit</span><span class="p">)</span>  
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>然后，创建这个接口的实现类：</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+</pre></td><td class="rouge-code"><pre><span class="kd">class</span> <span class="nc">ActivityLifecycleCallbacksDslImpl</span> <span class="p">:</span> <span class="nc">ActivityLifecycleCallbacksDsl</span> <span class="p">{</span>  
+    <span class="k">private</span> <span class="kd">var</span> <span class="py">onActivityCreatedImpl</span><span class="p">:</span> <span class="p">((</span><span class="nc">Activity</span><span class="p">,</span> <span class="nc">Bundle</span><span class="p">?)</span> <span class="p">-&gt;</span> <span class="nc">Unit</span><span class="p">)?</span> <span class="p">=</span> <span class="k">null</span>  
+    <span class="k">private</span> <span class="kd">var</span> <span class="py">onActivityDestroyedImpl</span><span class="p">:</span> <span class="p">((</span><span class="nc">Activity</span><span class="p">)</span> <span class="p">-&gt;</span> <span class="nc">Unit</span><span class="p">)?</span> <span class="p">=</span> <span class="k">null</span>  
+  
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityCreated</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="p">(</span><span class="nc">Activity</span><span class="p">,</span> <span class="nc">Bundle</span><span class="p">?)</span> <span class="p">-&gt;</span> <span class="nc">Unit</span><span class="p">)</span> <span class="p">{</span>  
+        <span class="n">onActivityCreatedImpl</span> <span class="p">=</span> <span class="n">a</span>  
+    <span class="p">}</span>  
+  
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityDestroyed</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="p">(</span><span class="nc">Activity</span><span class="p">)</span> <span class="p">-&gt;</span> <span class="nc">Unit</span><span class="p">)</span> <span class="p">{</span>  
+        <span class="n">onActivityDestroyedImpl</span> <span class="p">=</span> <span class="n">a</span>  
+    <span class="p">}</span>  
+  
+    <span class="k">fun</span> <span class="nf">create</span><span class="p">(</span><span class="n">application</span><span class="p">:</span> <span class="nc">Application</span><span class="p">)</span> <span class="p">{</span>  
+        <span class="n">application</span><span class="p">.</span><span class="nf">registerActivityLifecycleCallbacks</span><span class="p">(</span><span class="kd">object</span> <span class="err">:  
+            </span><span class="nc">Application</span><span class="p">.</span><span class="nc">ActivityLifecycleCallbacks</span> <span class="p">{</span>  
+  
+            <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityPaused</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">)</span> <span class="p">{</span>  
+            <span class="p">}</span>  
+  
+            <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityStarted</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">)</span> <span class="p">{</span>  
+            <span class="p">}</span>  
+  
+            <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityDestroyed</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">)</span> <span class="p">{</span>  
+                <span class="n">onActivityDestroyedImpl</span><span class="o">?.</span><span class="nf">invoke</span><span class="p">(</span><span class="n">p0</span><span class="p">)</span>  
+            <span class="p">}</span>  
+  
+            <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivitySaveInstanceState</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">,</span> <span class="n">p1</span><span class="p">:</span> <span class="nc">Bundle</span><span class="p">)</span> <span class="p">{</span>  
+            <span class="p">}</span>  
+  
+            <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityStopped</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">)</span> <span class="p">{</span>  
+            <span class="p">}</span>  
+  
+            <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityCreated</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">,</span> <span class="n">p1</span><span class="p">:</span> <span class="nc">Bundle</span><span class="p">?)</span> <span class="p">{</span>  
+                <span class="n">onActivityCreatedImpl</span><span class="o">?.</span><span class="nf">invoke</span><span class="p">(</span><span class="n">p0</span><span class="p">,</span> <span class="n">p1</span><span class="p">)</span>  
+            <span class="p">}</span>  
+  
+            <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityResumed</span><span class="p">(</span><span class="n">p0</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">)</span> <span class="p">{</span>  
+            <span class="p">}</span>  
+  
+        <span class="p">})</span>  
+    <span class="p">}</span>  
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>最后，我们创建一个<code class="language-plaintext highlighter-rouge">Application</code>的拓展方法：</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre><span class="k">fun</span> <span class="nc">Application</span><span class="p">.</span><span class="nf">registerActivityLifecycleCallbacksDsl</span><span class="p">(</span><span class="n">dsl</span><span class="p">:</span> <span class="nc">ActivityLifecycleCallbacksDsl</span><span class="p">.()</span> <span class="p">-&gt;</span> <span class="nc">Unit</span><span class="p">)</span> <span class="p">{</span>  
+    <span class="nc">ActivityLifecycleCallbacksDslImpl</span><span class="p">().</span><span class="nf">apply</span><span class="p">(</span><span class="n">dsl</span><span class="p">).</span><span class="nf">create</span><span class="p">(</span><span class="k">this</span><span class="p">)</span>  
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<h4 id="dslmarker">DslMarker</h4>
+<p>我们使用Jake Wharton的 <a href="https://github.com/JakeWharton/picnic">picnic</a>来说明DSL中的一个至关重要的点。
+当我们使用<a href="https://github.com/JakeWharton/picnic">picnic</a>创建一个包含header 和 footer的表格时，代码如下所示：</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre></td><td class="rouge-code"><pre><span class="nf">table</span> <span class="p">{</span>
+  <span class="nf">header</span> <span class="p">{</span>
+    <span class="c1">// Rows in a header always come first no matter when they're added.</span>
+    <span class="nf">row</span><span class="p">(</span><span class="s">"Hello"</span><span class="p">,</span> <span class="s">"Header"</span><span class="p">)</span>
+  <span class="p">}</span>
+  <span class="nf">footer</span> <span class="p">{</span>
+    <span class="c1">// Rows in a footer always come last no matter when they're added.</span>
+    <span class="nf">row</span><span class="p">(</span><span class="s">"Hello"</span><span class="p">,</span> <span class="s">"Footer"</span><span class="p">)</span>
+  <span class="p">}</span>
+  <span class="nf">row</span><span class="p">(</span><span class="s">"Hello"</span><span class="p">,</span> <span class="s">"World"</span><span class="p">)</span>
+  <span class="nf">cellStyle</span> <span class="p">{</span>
+    <span class="n">border</span> <span class="p">=</span> <span class="k">true</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>按照逻辑，header的DSL块中不应该包含footer，比如说（下面代码是个错误示范）：</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+</pre></td><td class="rouge-code"><pre><span class="nf">table</span> <span class="p">{</span>
+  <span class="nf">header</span> <span class="p">{</span>
+    <span class="c1">// Rows in a header always come first no matter when they're added.</span>
+    <span class="nf">row</span><span class="p">(</span><span class="s">"Hello"</span><span class="p">,</span> <span class="s">"Header"</span><span class="p">)</span>
+     <span class="c1">// this is error</span>
+	 <span class="nf">footer</span> <span class="p">{</span>
+	    <span class="c1">// Rows in a footer always come last no matter when they're added.</span>
+	    <span class="nf">row</span><span class="p">(</span><span class="s">"Hello"</span><span class="p">,</span> <span class="s">"Footer"</span><span class="p">)</span>
+	  <span class="p">}</span>
+  <span class="p">}</span>
+  <span class="nf">footer</span> <span class="p">{</span>
+    <span class="c1">// Rows in a footer always come last no matter when they're added.</span>
+    <span class="nf">row</span><span class="p">(</span><span class="s">"Hello"</span><span class="p">,</span> <span class="s">"Footer"</span><span class="p">)</span>
+  <span class="p">}</span>
+  <span class="nf">row</span><span class="p">(</span><span class="s">"Hello"</span><span class="p">,</span> <span class="s">"World"</span><span class="p">)</span>
+  <span class="nf">cellStyle</span> <span class="p">{</span>
+    <span class="n">border</span> <span class="p">=</span> <span class="k">true</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>当我们按如上代码编写的时候，编译器会报出一个错误：<em>‘fun footer(content: TableSectionDsl.() -&gt; Unit): Unit’ can’t be called in this context by implicit receiver. Use the explicit one if necessary</em>。这意味这某个DSL块中的方法只能受限于当前上下文下调用，这就是<code class="language-plaintext highlighter-rouge">DslMarker</code>这个注解的作用。</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+</pre></td><td class="rouge-code"><pre><span class="nd">@DslMarker</span>  
+<span class="k">private</span> <span class="k">annotation</span> <span class="kd">class</span> <span class="nc">PicnicDsl</span>  
+  
+<span class="k">fun</span> <span class="nf">table</span><span class="p">(</span><span class="n">content</span><span class="p">:</span> <span class="nc">TableDsl</span><span class="p">.()</span> <span class="p">-&gt;</span> <span class="nc">Unit</span><span class="p">)</span> <span class="p">=</span> <span class="nc">TableDslImpl</span><span class="p">().</span><span class="nf">apply</span><span class="p">(</span><span class="n">content</span><span class="p">).</span><span class="nf">create</span><span class="p">()</span>  
+  
+<span class="nd">@PicnicDsl</span>  
+<span class="kd">interface</span> <span class="nc">TableDsl</span> <span class="p">:</span> <span class="nc">TableSectionDsl</span> <span class="p">{</span>  
+  <span class="k">fun</span> <span class="nf">header</span><span class="p">(</span><span class="n">content</span><span class="p">:</span> <span class="nc">TableSectionDsl</span><span class="p">.()</span> <span class="p">-&gt;</span> <span class="nc">Unit</span><span class="p">)</span>  
+  <span class="k">fun</span> <span class="nf">body</span><span class="p">(</span><span class="n">content</span><span class="p">:</span> <span class="nc">TableSectionDsl</span><span class="p">.()</span> <span class="p">-&gt;</span> <span class="nc">Unit</span><span class="p">)</span>  
+  <span class="k">fun</span> <span class="nf">footer</span><span class="p">(</span><span class="n">content</span><span class="p">:</span> <span class="nc">TableSectionDsl</span><span class="p">.()</span> <span class="p">-&gt;</span> <span class="nc">Unit</span><span class="p">)</span>  
+  <span class="k">fun</span> <span class="nf">style</span><span class="p">(</span><span class="n">content</span><span class="p">:</span> <span class="nc">TableStyleDsl</span><span class="p">.()</span> <span class="p">-&gt;</span> <span class="nc">Unit</span><span class="p">)</span>  
+<span class="p">}</span>  
+  
+<span class="nd">@PicnicDsl</span>  
+<span class="kd">interface</span> <span class="nc">TableStyleDsl</span> <span class="p">{</span>  
+  <span class="kd">var</span> <span class="py">border</span><span class="p">:</span> <span class="nc">Boolean</span><span class="p">?</span>  
+  <span class="kd">var</span> <span class="py">borderStyle</span><span class="p">:</span> <span class="nc">BorderStyle</span><span class="p">?</span>  
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<!--stackedit_data:
+eyJoaXN0b3J5IjpbLTQ4NDQ2NzQyMV19
+-->
+
+
+    <p class="signature">&mdash; Lenox&nbsp;Xian</p>
+  </div>
+  </script>
+</body>
+
+</html>

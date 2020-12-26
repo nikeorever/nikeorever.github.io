@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Collections and Sequences - Lenox&nbsp;Xian</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans SC:300,400,700" type="text/css">
+  <link rel="stylesheet" href="/static/app.css" type="text/css">
+  <link rel="stylesheet" href="/static/syntax.css" type="text/css">
+</head>
+
+<body>
+  <header>
+    <h1>Lenox&nbsp;Xian</h1>
+    <p>Everything negative-pressure，challenges-is all an opportunity for me to rise</p>
+  </header>
+
+  <div class="post_content">
+    <h2>Collections and Sequences</h2>
+    <p class="date">20 July 2020</p>
+
+    <blockquote>
+  <p><em>Kotlin</em>相比<em>Java</em>而言，一大优势在于前者利用其强大语法糖向开发者提供了丰富的函数拓展，并且通过编译优化(如<em>inline</em>)，使得这些函数在易用的同时依然保持着很高的性能。其中，<em>Container</em>作为各个编程语言中至关重要的一部分，<em>Kotlin</em>也为其增加了丰富的<em>operation</em>，比如常用的 <em>map/filter/reduce</em>。但是，随着应用/数据的日益增大，我们也应该重新审视这些当初带给我们极大便利的<em>operation</em>，即，原来的方案有哪些不足，是否有更加合适的方案来帮助我们完成这些<em>operation</em>。这就是这篇文章讨论的重点。</p>
+</blockquote>
+
+<p>和往常一样，我们从一个例子开始。现在我们有一些填充了各种颜色的形状-<em>绿色的圆形</em>，<em>蓝色的矩形</em>，<em>红色的菱形</em>，<em>黑色的三角形</em>，我们将这些五彩斑斓的形状存入一个<code class="language-plaintext highlighter-rouge">List</code>中，然后通过<code class="language-plaintext highlighter-rouge">map</code>操作将这些形状的颜色全部更改成<em>红色</em>，最后通过<code class="language-plaintext highlighter-rouge">first</code>操作筛选出第一个形状为<em>矩形</em>的形状。代码如下所示：</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre><span class="n">listOf</span><span class="p">&lt;</span><span class="nc">Shape</span><span class="p">&gt;(</span><span class="nc">Round</span><span class="p">(</span><span class="nc">Color</span><span class="p">.</span><span class="nc">GREEN</span><span class="p">),</span> <span class="nc">Rectangle</span><span class="p">(</span><span class="nc">Color</span><span class="p">.</span><span class="nc">BLUE</span><span class="p">),</span> <span class="nc">Diamond</span><span class="p">(</span><span class="nc">Color</span><span class="p">.</span><span class="nc">RED</span><span class="p">),</span> <span class="nc">Triangle</span><span class="p">(</span><span class="nc">Color</span><span class="p">.</span><span class="nc">BLACK</span><span class="p">))</span>  
+        <span class="p">.</span><span class="nf">map</span> <span class="p">{</span> <span class="n">it</span><span class="p">.</span><span class="nf">copy</span><span class="p">(</span><span class="nc">Color</span><span class="p">.</span><span class="nc">RED</span><span class="p">)</span> <span class="p">}</span>  
+		<span class="p">.</span><span class="nf">first</span> <span class="p">{</span> <span class="n">it</span> <span class="k">is</span> <span class="nc">Rectangle</span> <span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>先考虑第一个问题：这段程序的目的是为了获取到列表中的第一个<em>矩形</em>，并且，这个矩形的颜色要通过<code class="language-plaintext highlighter-rouge">map</code>将原来的<em>蓝色</em>转换成<em>红色</em>，那其实列表中的除矩形以外的其他形状其实都没有必要做<code class="language-plaintext highlighter-rouge">map</code>映射。这些无意义的<em>operation</em>势必会随着数据量的增大为应用带来不必要的负担。</p>
+
+<p>在考虑第二个问题：如果你看过<em>Collection</em>的<code class="language-plaintext highlighter-rouge">map</code>实现，那应该很清楚，这个操作除了会对列表中的所有<em>形状</em>作<em>map映射</em>，而且会<em>创建一个新的集合去存储这些映射后的形状</em>。这样，相比第一个问题中增加了许多无意义的<code class="language-plaintext highlighter-rouge">map</code>，这里的问题貌似更加严重，因为我们知道在堆（heap）中创建对象的代价是非常昂贵的，以至于<em>Kotlin</em>为了减少因为使用<em>lamda</em>而创建的匿名内部类，提供了<code class="language-plaintext highlighter-rouge">inline</code>关键字做优化。当然，对于数据量小，<em>operation</em>少的程序可以忽略。</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre><span class="k">public</span> <span class="k">inline</span> <span class="k">fun</span> <span class="p">&lt;</span><span class="nc">T</span><span class="p">,</span> <span class="nc">R</span><span class="p">&gt;</span> <span class="nf">Iterable</span><span class="p">&lt;</span><span class="nc">T</span><span class="p">&gt;.</span><span class="nf">map</span><span class="p">(</span><span class="n">transform</span><span class="p">:</span> <span class="p">(</span><span class="nc">T</span><span class="p">)</span> <span class="p">-&gt;</span> <span class="nc">R</span><span class="p">):</span> <span class="nc">List</span><span class="p">&lt;</span><span class="nc">R</span><span class="p">&gt;</span> <span class="p">{</span>  
+    <span class="k">return</span> <span class="nf">mapTo</span><span class="p">(</span><span class="nc">ArrayList</span><span class="p">&lt;</span><span class="nc">R</span><span class="p">&gt;(</span><span class="nf">collectionSizeOrDefault</span><span class="p">(</span><span class="mi">10</span><span class="p">)),</span> <span class="n">transform</span><span class="p">)</span>  
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>为了解决以上两个问题，<em>Kotlin</em>推出了独立于集合框架的新的标准库容器类-<em>Sequence</em>，和集合一样， 它提供了相同的函数，所以可以在不用修改原有程序的基础上进行<em>Collection</em>与<em>Sequence</em>的方便转化，但是实现却完全不一样：传统的集合的多步操作中每一步都是<em>提前</em>评估和执行，并且会产生一个<em>中间（intermediate）</em>集合；而<em>Sequence</em>将多步操作分为两类：中间操作（Intermediate）和终端操作（Terminal），所有的<em>中间操作</em>都是尽可能惰性的，只有终端操作开始执行的时候，这些中间操作链才会开始执行，而且没有中间集合的产生。很重要的一点，相对与集合中是完成整个集合的每个步骤，然后进行下一步，<em>Sequence</em>对每个元素一个一个地执行所有处理步骤（<em>one by one</em>）。</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre></td><td class="rouge-code"><pre><span class="n">listOf</span><span class="p">&lt;</span><span class="nc">Shape</span><span class="p">&gt;(</span><span class="nc">Round</span><span class="p">(</span><span class="nc">Color</span><span class="p">.</span><span class="nc">GREEN</span><span class="p">),</span> <span class="nc">Rectangle</span><span class="p">(</span><span class="nc">Color</span><span class="p">.</span><span class="nc">BLUE</span><span class="p">),</span> <span class="nc">Diamond</span><span class="p">(</span><span class="nc">Color</span><span class="p">.</span><span class="nc">RED</span><span class="p">),</span> <span class="nc">Triangle</span><span class="p">(</span><span class="nc">Color</span><span class="p">.</span><span class="nc">BLACK</span><span class="p">))</span>  
+		<span class="p">.</span><span class="nf">asSequence</span><span class="p">()</span>
+        <span class="p">.</span><span class="nf">map</span> <span class="p">{</span> <span class="n">it</span><span class="p">.</span><span class="nf">copy</span><span class="p">(</span><span class="nc">Color</span><span class="p">.</span><span class="nc">RED</span><span class="p">)</span> <span class="p">}</span>  
+		<span class="p">.</span><span class="nf">first</span> <span class="p">{</span> <span class="n">it</span> <span class="k">is</span> <span class="nc">Rectangle</span> <span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>为了更加形象的查看两种容器的执行过程，我们为每个步骤增加后打印。结果如下：</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre></td><td class="rouge-code"><pre>Collection:
+
+map Round(color=GREEN)
+map Rectangle(color=BLUE)
+map Diamond(color=RED)
+map Triangle(color=BLACK)
+first Round(color=RED)
+first Rectangle(color=RED)
+</pre></td></tr></tbody></table></code></pre></div></div>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td><td class="rouge-code"><pre>Sequence:
+
+map Round(color=GREEN)
+first Round(color=RED)
+map Rectangle(color=BLUE)
+first Rectangle(color=RED)
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>可见，<em>Sequence</em>完美的解决了上面提出的两个问题。
+前面我们提到，<em>Sequence</em>只要在执行<em>终端操作</em>的时候才会执行<em>中间操作</em>，那哪些是<em>终端操作</em>呢？其实可以触发<code class="language-plaintext highlighter-rouge">Iterator</code>执行的操作都是<em>终端操作</em>，如<code class="language-plaintext highlighter-rouge">toList</code>，<code class="language-plaintext highlighter-rouge">forEach</code>，<code class="language-plaintext highlighter-rouge">sumBy</code>，<code class="language-plaintext highlighter-rouge">count</code>等等。</p>
+
+<h4 id="结论">结论</h4>
+<ul>
+  <li>对于数量级比较小的集合，并且只有一到两个操作时，这两种容器并没有明显的性能差异。</li>
+  <li>对于数量级大的集合，中间操作的执行和中间集合的创建都是非常昂贵的，推荐使用<em>Sequence</em>。</li>
+</ul>
+
+<h4 id="dart语言中的集合">Dart语言中的集合</h4>
+<p>由于Flutter需要高性能的语言支持，Dart中的内置集合操作虽然没有Kotlin这么丰富，但是它的实现和<em>Sequence</em>的实现是同理的。作者基于Google的<a href="https://pub.dev/packages/quiver">dart-quiver</a>发布了一个新的Package-<a href="https://pub.dev/packages/wedzera">wedzera</a>，这个库借助Dart extension，为集合拓展了更加丰富，更加常用的操作，都是使用<em>Sequence</em>的设计思想，有性能保证。</p>
+
+<h4 id="kotlin中的惰性序列和dart中的synchronous-generator">Kotlin中的惰性序列和Dart中的Synchronous generator</h4>
+<p>两者是很相通的东西，即使实现原理不一样，前者是利用<em>协程（Coroutine）</em>。 以下实现一个获取无限自然数的序列</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td><td class="rouge-code"><pre><span class="n">sequence</span><span class="p">&lt;</span><span class="nc">Int</span><span class="p">&gt;</span> <span class="p">{</span>  
+  <span class="kd">var</span> <span class="py">i</span> <span class="p">=</span> <span class="mi">0</span><span class="p">;</span>  
+  <span class="k">while</span> <span class="p">(</span><span class="k">true</span><span class="p">)</span> <span class="p">{</span>  
+      <span class="k">yield</span><span class="p">(</span><span class="n">i</span><span class="p">++);</span>  
+  <span class="p">}</span>  
+<span class="p">}.</span><span class="nf">take</span><span class="p">(</span><span class="mi">100</span><span class="p">).</span><span class="nf">forEach</span><span class="p">(</span><span class="o">::</span><span class="n">print</span><span class="p">)</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre></td><td class="rouge-code"><pre><span class="n">Iterable</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">generator</span><span class="o">()</span> <span class="n">sync</span><span class="o">*</span> <span class="o">{</span>  
+  <span class="kd">var</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>  
+  <span class="k">while</span> <span class="o">(</span><span class="kc">true</span><span class="o">)</span> <span class="o">{</span>  
+    <span class="n">yield</span> <span class="n">i</span><span class="o">++;</span>  
+  <span class="o">}</span>  
+<span class="o">}</span>
+
+<span class="kt">void</span> <span class="nf">main</span><span class="p">(</span><span class="n">List</span><span class="o">&lt;</span><span class="kt">String</span><span class="o">&gt;</span> <span class="n">arguments</span><span class="o">)</span> <span class="o">{</span>  
+  <span class="n">generator</span><span class="o">().</span><span class="na">take</span><span class="o">(</span><span class="mi">100</span><span class="o">).</span><span class="na">forEach</span><span class="o">(</span><span class="n">print</span><span class="o">);</span>  
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>其实Dart中的<em>Stream</em> 更像Kotlin中的<em>Flow</em>，将来有机会在讨论。
+<!--stackedit_data:
+eyJoaXN0b3J5IjpbMTk2Mjg5NTQwOSwxNjM5Njg5NjM0LDEzND
+AxNTY3OTYsLTQ5MjU3OTQwM119
+--></p>
+
+
+    <p class="signature">&mdash; Lenox&nbsp;Xian</p>
+  </div>
+  </script>
+</body>
+
+</html>

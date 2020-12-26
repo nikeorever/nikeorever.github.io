@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>State management - Lenox&nbsp;Xian</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans SC:300,400,700" type="text/css">
+  <link rel="stylesheet" href="/static/app.css" type="text/css">
+  <link rel="stylesheet" href="/static/syntax.css" type="text/css">
+</head>
+
+<body>
+  <header>
+    <h1>Lenox&nbsp;Xian</h1>
+    <p>Everything negative-pressure，challenges-is all an opportunity for me to rise</p>
+  </header>
+
+  <div class="post_content">
+    <h2>State management</h2>
+    <p class="date">03 May 2020</p>
+
+    <blockquote>
+  <p>这篇文章是Flutter state management系列的一部分。讨论的是在Flutter中是如何原生支持状态管理，当然，这部分API可能比较low-level，但是pub.dev上一些受欢迎的状态管理库(比如 provider)的底层都是基于此，所以了解其实现原理相当重要，这也是这篇文章的重点。</p>
+</blockquote>
+
+<h3 id="前言">前言</h3>
+<p>作者原来从事Android开发，习惯了使用<code class="language-plaintext highlighter-rouge">findViewById</code>这种在命令式UI编程（imperative style of UI programming）环境下数据共享（Flutter中称作共享状态<em>shared state</em>）的方式，但Flutter采用的是声明式UI编程（declarative style of UI programming），没有习惯的 <code class="language-plaintext highlighter-rouge">findViewById</code> 或者 <code class="language-plaintext highlighter-rouge">Text.setText()</code>，所以转换原来的思维，用新的思想去考虑这种编程范式，寻找合适的状态管理模式。</p>
+
+<h3 id="状态">状态</h3>
+<p><em>UI = f( state )</em>，这个有趣的公式的解释了为什么Flutter是声明式的，描述了 <em>state</em> 和 <em>ui</em> 之间的关系，这表示Flutter会构建其用户界面以反映应用的当前状态。Flutter将状态分为两类：暂时状态（Ephemeral state）和 App状态（App state），前者往往只存在与单一控件中，随控件的销毁而回收，不需要与其他控件共享其状态，这不需要使用状态管理技术；后者与前者相反，其往往可能需要在应用的多个部分之间共享，观察（订阅）/通知更新是常见的操作，比如说电商应用的购物车，在购物页面可以将需要购买的商品放入购物车中，在购物车页面可以进行删除商品，在支付页面需要计算购物车中的所有商品的价格，这都需要利用状态管理技术才能优雅的实现。</p>
+
+<h3 id="简单用法">简单用法</h3>
+<p>在这里，我们举一个比较简单例子来说明<code class="language-plaintext highlighter-rouge">InheritedModel</code>是如何使用的，然后从用法了解其底层实现原理。我们将利用Flutter 默认的Application项目，但是我们修改其<code class="language-plaintext highlighter-rouge">AppBar</code>中	<code class="language-plaintext highlighter-rouge">title</code>的来源：从原来的从构造器传入修改为从父控件（这里指 <code class="language-plaintext highlighter-rouge">InheritedModel</code>）中获取，因为<code class="language-plaintext highlighter-rouge">InheritedModel</code>间接继承于<code class="language-plaintext highlighter-rouge">Widget</code>，所以它其实就是一个<code class="language-plaintext highlighter-rouge">Widet</code>，可以用来构建UI tree中的一个<code class="language-plaintext highlighter-rouge">Element</code>。这里，我们将<code class="language-plaintext highlighter-rouge">title</code>存入新创建的<code class="language-plaintext highlighter-rouge">InheritedModel</code>的子类<code class="language-plaintext highlighter-rouge">MyModel</code>中，这样所有的<code class="language-plaintext highlighter-rouge">children</code>都可以获取到这个<code class="language-plaintext highlighter-rouge">title</code>，在这里，这个<code class="language-plaintext highlighter-rouge">title</code>只用于<code class="language-plaintext highlighter-rouge">AppBar</code>。</p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+</pre></td><td class="rouge-code"><pre><span class="kd">class</span> <span class="nc">MyModel</span> <span class="kd">extends</span> <span class="n">InheritedModel</span><span class="o">&lt;</span><span class="kt">String</span><span class="o">&gt;</span> <span class="o">{</span>  
+  <span class="kd">const</span> <span class="n">MyModel</span><span class="o">(</span><span class="k">this</span><span class="o">.</span><span class="na">title</span><span class="o">,</span> <span class="o">{</span><span class="n">Key</span> <span class="n">key</span><span class="o">,</span> <span class="n">Widget</span> <span class="n">child</span><span class="o">})</span>  
+      <span class="o">:</span> <span class="k">super</span><span class="o">(</span><span class="nl">key:</span> <span class="n">key</span><span class="o">,</span> <span class="nl">child:</span> <span class="n">child</span><span class="o">);</span>  
+  
+  <span class="c1">/// AppBar title  </span>
+  <span class="kd">final</span> <span class="kt">String</span> <span class="n">title</span><span class="o">;</span>  
+  
+ <span class="kd">static</span> <span class="n">MyModel</span> <span class="n">of</span><span class="o">(</span><span class="n">BuildContext</span> <span class="n">context</span><span class="o">)</span> <span class="o">{</span>  
+    <span class="k">return</span> <span class="n">InheritedModel</span><span class="o">.</span><span class="na">inheritFrom</span><span class="o">&lt;</span><span class="n">MyModel</span><span class="o">&gt;(</span><span class="n">context</span><span class="o">,</span> <span class="nl">aspect:</span> <span class="kc">null</span><span class="o">);</span>  
+  <span class="o">}</span>  
+  
+  <span class="nd">@override</span>  
+  <span class="kt">bool</span> <span class="n">updateShouldNotify</span><span class="o">(</span><span class="n">InheritedWidget</span> <span class="n">oldWidget</span><span class="o">)</span> <span class="o">{</span>  
+    <span class="k">return</span> <span class="kc">true</span><span class="o">;</span>  
+  <span class="o">}</span>  
+  
+  <span class="nd">@override</span>  
+  <span class="kt">bool</span> <span class="n">updateShouldNotifyDependent</span><span class="o">(</span>  
+      <span class="n">InheritedModel</span><span class="o">&lt;</span><span class="kt">String</span><span class="o">&gt;</span> <span class="n">oldWidget</span><span class="o">,</span> <span class="kt">Set</span><span class="o">&lt;</span><span class="kt">String</span><span class="o">&gt;</span> <span class="n">dependencies</span><span class="o">)</span> <span class="o">{</span>  
+    <span class="k">return</span> <span class="kc">true</span><span class="o">;</span>  
+  <span class="o">}</span>  
+<span class="o">}</span>
+
+<span class="kd">class</span> <span class="nc">MyApp</span> <span class="kd">extends</span> <span class="n">StatelessWidget</span> <span class="o">{</span>  
+  <span class="c1">// This widget is the root of your application.  </span>
+  <span class="nd">@override</span>  
+  <span class="n">Widget</span> <span class="n">build</span><span class="o">(</span><span class="n">BuildContext</span> <span class="n">context</span><span class="o">)</span> <span class="o">{</span>  
+    <span class="k">return</span> <span class="n">MaterialApp</span><span class="o">(</span>  
+      <span class="nl">title:</span> <span class="s">'Flutter Demo'</span><span class="o">,</span>  
+	  <span class="nl">theme:</span> <span class="n">ThemeData</span><span class="o">(...),</span>  
+	  <span class="nl">home:</span> <span class="n">MyModel</span><span class="o">(</span><span class="s">'Flutter Demo Home Page'</span><span class="o">,</span> <span class="nl">child:</span> <span class="n">MyHomePage</span><span class="o">()),</span>  
+	<span class="o">);</span>  
+  <span class="o">}</span>  
+<span class="o">}</span>  
+  
+<span class="kd">class</span> <span class="nc">MyHomePage</span> <span class="kd">extends</span> <span class="n">StatefulWidget</span> <span class="o">{</span>  
+  <span class="n">MyHomePage</span><span class="o">({</span><span class="n">Key</span> <span class="n">key</span><span class="o">})</span> <span class="o">:</span> <span class="k">super</span><span class="o">(</span><span class="nl">key:</span> <span class="n">key</span><span class="o">);</span>  
+  
+  <span class="nd">@override</span>  
+  <span class="n">_MyHomePageState</span> <span class="n">createState</span><span class="o">()</span> <span class="o">=&gt;</span> <span class="n">_MyHomePageState</span><span class="o">();</span>  
+<span class="o">}</span>  
+  
+<span class="kd">class</span> <span class="nc">_MyHomePageState</span> <span class="kd">extends</span> <span class="n">State</span><span class="o">&lt;</span><span class="n">MyHomePage</span><span class="o">&gt;</span> <span class="o">{</span>  
+  <span class="o">...</span> 
+  <span class="nd">@override</span>  
+  <span class="n">Widget</span> <span class="n">build</span><span class="o">(</span><span class="n">BuildContext</span> <span class="n">context</span><span class="o">)</span> <span class="o">{</span>  
+    <span class="k">return</span> <span class="n">Scaffold</span><span class="o">(</span>  
+      <span class="nl">appBar:</span> <span class="n">AppBar</span><span class="o">(</span>  
+        <span class="nl">title:</span> <span class="n">Text</span><span class="o">(</span><span class="n">MyModel</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">context</span><span class="o">).</span><span class="na">title</span><span class="o">),</span>  
+	  <span class="o">)</span>
+	  <span class="o">...</span>
+     <span class="o">);</span>  
+  <span class="o">}</span>  
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<h4 id="如何从-child-widget-获取到-指定-parent-widget">如何从 Child Widget 获取到 指定 Parent Widget?</h4>
+<p>要使你需要共享的 <em>Parent Widget</em>能够被它的<code class="language-plaintext highlighter-rouge">Children</code>发现，你的 <em>Parent Widget</em>需要继承自<code class="language-plaintext highlighter-rouge">InheritedWidget</code>（当然，<code class="language-plaintext highlighter-rouge">InheritedModel</code> 也是继承自<code class="language-plaintext highlighter-rouge">InheritedWidget</code>），<code class="language-plaintext highlighter-rouge">InheritedWidget</code>的官方解释是<em>Base class for widgets that efficiently propagate information down the tree.</em>，那它是如何传播信息的呢？正向的思路不太容易知道，但是我们可以反向来，我们研究从子控件是如何获取上层控件反推，就可以发现其所以然。
+在子控件中是通过<code class="language-plaintext highlighter-rouge">MyModel.of(context)</code>这样一个 <em>model-specific  static of method</em> 获取<code class="language-plaintext highlighter-rouge">MyModel</code>的，看到这种方法定义，想必每个Flutter开发者都很面熟，的确，这种状态管理技术已经广泛的应用到Flutter framework中，例如<code class="language-plaintext highlighter-rouge">Theme.of(context)</code>，<code class="language-plaintext highlighter-rouge">MediaQuery.of(context)</code>，这应该算作是一种规范，应该是所有Flutter开发者都应该遵守的。</p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre><span class="kd">static</span> <span class="n">MyModel</span> <span class="nf">of</span><span class="p">(</span><span class="n">BuildContext</span> <span class="n">context</span><span class="o">)</span> <span class="o">{</span>  
+  <span class="k">return</span> <span class="n">InheritedMdel</span><span class="o">.</span><span class="na">inheritFrom</span><span class="o">&lt;</span><span class="n">MyModel</span><span class="o">&gt;(</span><span class="n">context</span><span class="o">,</span> <span class="nl">aspect:</span> <span class="kc">null</span><span class="o">);</span>  
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>这个静态方法内部调用了<code class="language-plaintext highlighter-rouge">InheritedModel</code>的泛型静态方法<code class="language-plaintext highlighter-rouge">inheritFrom</code>，我们先忽略第二个参数。</p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td><td class="rouge-code"><pre><span class="kd">static</span> <span class="n">T</span> <span class="n">inheritFrom</span><span class="o">&lt;</span><span class="n">T</span> <span class="kd">extends</span> <span class="n">InheritedModel</span><span class="o">&lt;</span><span class="kt">Object</span><span class="o">&gt;&gt;(</span><span class="n">BuildContext</span> <span class="n">context</span><span class="o">,</span> <span class="o">{</span> <span class="kt">Object</span> <span class="n">aspect</span> <span class="o">})</span> <span class="o">{</span>  
+    <span class="k">if</span> <span class="o">(</span><span class="n">aspect</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span>  
+      <span class="k">return</span> <span class="n">context</span><span class="o">.</span><span class="na">dependOnInheritedWidgetOfExactType</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;();</span>  
+    <span class="o">...</span>   
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>当<code class="language-plaintext highlighter-rouge">aspect</code>为<code class="language-plaintext highlighter-rouge">null</code>的时候，它又调用了<code class="language-plaintext highlighter-rouge">BuildContext</code>的成员方法<code class="language-plaintext highlighter-rouge">dependOnInheritedWidgetOfExactType</code>，继续进入这个方法，发现它定义在<code class="language-plaintext highlighter-rouge">Element</code>中，在这里我们其实可以猜测一个其他的东西，我们所用到的<code class="language-plaintext highlighter-rouge">BuildContext</code>其实都是<code class="language-plaintext highlighter-rouge">Element</code>的实现，通过下面的源码证实了这一点：</p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre></td><td class="rouge-code"><pre><span class="kd">class</span><span class="err">:</span> <span class="nc">State</span>
+
+<span class="c1">/// The location in the tree where this widget builds.  </span>
+<span class="c1">///  </span>
+<span class="c1">/// The framework associates [State] objects with a [BuildContext] after  </span>
+<span class="c1">/// creating them with [StatefulWidget.createState] and before calling  </span>
+<span class="c1">/// [initState]. The association is permanent: the [State] object will never  </span>
+<span class="c1">/// change its [BuildContext]. However, the [BuildContext] itself can be moved  </span>
+<span class="c1">/// around the tree.  </span>
+<span class="c1">///  </span>
+<span class="c1">/// After calling [dispose], the framework severs the [State] object's  </span>
+<span class="c1">/// connection with the [BuildContext].  </span>
+<span class="n">BuildContext</span> <span class="kd">get</span> <span class="n">context</span> <span class="o">=&gt;</span> <span class="n">_element</span><span class="o">;</span>  
+<span class="n">StatefulElement</span> <span class="n">_element</span><span class="o">;</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre></td><td class="rouge-code"><pre><span class="kd">class</span><span class="err">:</span> <span class="nc">StatefulElement</span>
+
+<span class="nd">@override</span>  
+<span class="n">Widget</span> <span class="nf">build</span><span class="p">(</span><span class="o">)</span> <span class="o">=&gt;</span> <span class="n">_state</span><span class="o">.</span><span class="na">build</span><span class="o">(</span><span class="k">this</span><span class="o">);</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>这不是这篇文章的重点，我们继续查看<code class="language-plaintext highlighter-rouge">dependOnInheritedWidgetOfExactType</code>的实现，方法的第二行是说要从<code class="language-plaintext highlighter-rouge">_inheritedWidgets</code>这个<code class="language-plaintext highlighter-rouge">Map</code>中根据<code class="language-plaintext highlighter-rouge">Key</code>去获取对于的<code class="language-plaintext highlighter-rouge">InheritedElement</code>，注意，这里至关重要，这是我们反推的开始点，我们在继续查看下面的逻辑，如果找到，则相互添加自己为依赖，最后，从查到的这个<code class="language-plaintext highlighter-rouge">InheritedElement</code>中获取<code class="language-plaintext highlighter-rouge">Widget</code>并作强制类型转换返回。</p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+</pre></td><td class="rouge-code"><pre><span class="kd">class</span><span class="err">:</span> <span class="nc">Element</span>
+
+<span class="nd">@override</span>  
+<span class="n">T</span> <span class="n">dependOnInheritedWidgetOfExactType</span><span class="o">&lt;</span><span class="n">T</span> <span class="kd">extends</span> <span class="n">InheritedWidget</span><span class="o">&gt;({</span><span class="kt">Object</span> <span class="n">aspect</span><span class="o">})</span> <span class="o">{</span>  
+  <span class="k">assert</span><span class="o">(</span><span class="n">_debugCheckStateIsActiveForAncestorLookup</span><span class="o">());</span>  
+ <span class="kd">final</span> <span class="n">InheritedElement</span> <span class="n">ancestor</span> <span class="o">=</span> <span class="n">_inheritedWidgets</span> <span class="o">==</span> <span class="kc">null</span> <span class="o">?</span> <span class="kc">null</span> <span class="o">:</span> <span class="n">_inheritedWidgets</span><span class="o">[</span><span class="n">T</span><span class="o">];</span>  
+ <span class="k">if</span> <span class="o">(</span><span class="n">ancestor</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>  
+    <span class="k">assert</span><span class="o">(</span><span class="n">ancestor</span> <span class="k">is</span> <span class="n">InheritedElement</span><span class="o">);</span>  
+ <span class="k">return</span> <span class="n">dependOnInheritedElement</span><span class="o">(</span><span class="n">ancestor</span><span class="o">,</span> <span class="nl">aspect:</span> <span class="n">aspect</span><span class="o">)</span> <span class="k">as</span> <span class="n">T</span><span class="o">;</span>  
+  <span class="o">}</span>  
+  <span class="n">_hadUnsatisfiedDependencies</span> <span class="o">=</span> <span class="kc">true</span><span class="o">;</span>  
+ <span class="k">return</span> <span class="kc">null</span><span class="o">;}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>现在我们开始从上述提到的关键点开始反推，往<code class="language-plaintext highlighter-rouge">_inheritedWidgets</code>这个<code class="language-plaintext highlighter-rouge">Map</code>中设置数据是开始点，在整个<em>Element</em>类中只有一个方法是用来给<code class="language-plaintext highlighter-rouge">_inheritedWidgets</code>设置数据的：</p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td><td class="rouge-code"><pre><span class="kd">class</span><span class="err">:</span> <span class="nc">Element</span>
+
+<span class="kt">void</span> <span class="nf">_updateInheritance</span><span class="p">(</span><span class="o">)</span> <span class="o">{</span>  
+  <span class="k">assert</span><span class="o">(</span><span class="n">_active</span><span class="o">);</span>  
+  <span class="n">_inheritedWidgets</span> <span class="o">=</span> <span class="n">_parent</span><span class="o">?.</span><span class="na">_inheritedWidgets</span><span class="o">;</span>  
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>这个方法调用出在<code class="language-plaintext highlighter-rouge">mount</code>方法</p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+</pre></td><td class="rouge-code"><pre><span class="nd">@mustCallSuper</span>  
+<span class="kt">void</span> <span class="nf">mount</span><span class="p">(</span><span class="n">Element</span> <span class="n">parent</span><span class="o">,</span> <span class="kd">dynamic</span> <span class="n">newSlot</span><span class="o">)</span> <span class="o">{</span>  
+  <span class="k">assert</span><span class="o">(</span><span class="n">_debugLifecycleState</span> <span class="o">==</span> <span class="n">_ElementLifecycle</span><span class="o">.</span><span class="na">initial</span><span class="o">);</span>  
+ <span class="k">assert</span><span class="o">(</span><span class="n">widget</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">);</span>  
+ <span class="k">assert</span><span class="o">(</span><span class="n">_parent</span> <span class="o">==</span> <span class="kc">null</span><span class="o">);</span>  
+ <span class="k">assert</span><span class="o">(</span><span class="n">parent</span> <span class="o">==</span> <span class="kc">null</span> <span class="o">||</span> <span class="n">parent</span><span class="o">.</span><span class="na">_debugLifecycleState</span> <span class="o">==</span> <span class="n">_ElementLifecycle</span><span class="o">.</span><span class="na">active</span><span class="o">);</span>  
+ <span class="k">assert</span><span class="o">(</span><span class="n">slot</span> <span class="o">==</span> <span class="kc">null</span><span class="o">);</span>  
+ <span class="k">assert</span><span class="o">(</span><span class="n">depth</span> <span class="o">==</span> <span class="kc">null</span><span class="o">);</span>  
+ <span class="k">assert</span><span class="o">(!</span><span class="n">_active</span><span class="o">);</span>  
+  <span class="n">_parent</span> <span class="o">=</span> <span class="n">parent</span><span class="o">;</span>  
+  <span class="n">_slot</span> <span class="o">=</span> <span class="n">newSlot</span><span class="o">;</span>  
+  <span class="n">_depth</span> <span class="o">=</span> <span class="n">_parent</span> <span class="o">!=</span> <span class="kc">null</span> <span class="o">?</span> <span class="n">_parent</span><span class="o">.</span><span class="na">depth</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">:</span> <span class="mi">1</span><span class="o">;</span>  
+  <span class="n">_active</span> <span class="o">=</span> <span class="kc">true</span><span class="o">;</span>  
+ <span class="k">if</span> <span class="o">(</span><span class="n">parent</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="c1">// Only assign ownership if the parent is non-null  </span>
+  <span class="n">_owner</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="na">owner</span><span class="o">;</span>  
+ <span class="kd">final</span> <span class="n">Key</span> <span class="n">key</span> <span class="o">=</span> <span class="n">widget</span><span class="o">.</span><span class="na">key</span><span class="o">;</span>  
+ <span class="k">if</span> <span class="o">(</span><span class="n">key</span> <span class="k">is</span> <span class="n">GlobalKey</span><span class="o">)</span> <span class="o">{</span>  
+    <span class="n">key</span><span class="o">.</span><span class="na">_register</span><span class="o">(</span><span class="k">this</span><span class="o">);</span>  
+  <span class="o">}</span>  
+  <span class="n">_updateInheritance</span><span class="o">();</span>  
+ <span class="k">assert</span><span class="o">(()</span> <span class="o">{</span>  
+    <span class="n">_debugLifecycleState</span> <span class="o">=</span> <span class="n">_ElementLifecycle</span><span class="o">.</span><span class="na">active</span><span class="o">;</span>  
+ <span class="k">return</span> <span class="kc">true</span><span class="o">;</span>  <span class="o">}());</span>  
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>熟悉Flutter UI构建流程的人都知道，这是<code class="language-plaintext highlighter-rouge">Element</code>被添加到Tree的入口方法，所以，我们可以清楚的认识到，<code class="language-plaintext highlighter-rouge">_inheritedWidgets</code>是在UI Tree构建过程中逐步的从父节点继承下来的，由于我们的<code class="language-plaintext highlighter-rouge">MyModel</code>控件是一个<code class="language-plaintext highlighter-rouge">InheritedWidget</code>，所以，<code class="language-plaintext highlighter-rouge">InheritedElement</code>使用<code class="language-plaintext highlighter-rouge">MyModel</code>的来配置，由于<code class="language-plaintext highlighter-rouge">InheritedElement</code>是继承自<code class="language-plaintext highlighter-rouge">Element</code>，所以它也具有<code class="language-plaintext highlighter-rouge">_updateInheritance()</code>，由于它是<code class="language-plaintext highlighter-rouge">InheritedElement</code>唯一可提供者，所以它需要override这个方法，提供<code class="language-plaintext highlighter-rouge">_inheritedWidgets</code>，供下层节点使用。</p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre></td><td class="rouge-code"><pre><span class="nd">@override</span>  
+<span class="kt">void</span> <span class="nf">_updateInheritance</span><span class="p">(</span><span class="o">)</span> <span class="o">{</span>  
+  <span class="k">assert</span><span class="o">(</span><span class="n">_active</span><span class="o">);</span>  
+ <span class="kd">final</span> <span class="n">Map</span><span class="o">&lt;</span><span class="n">Type</span><span class="o">,</span> <span class="n">InheritedElement</span><span class="o">&gt;</span> <span class="n">incomingWidgets</span> <span class="o">=</span> <span class="n">_parent</span><span class="o">?.</span><span class="na">_inheritedWidgets</span><span class="o">;</span>  
+ <span class="k">if</span> <span class="o">(</span><span class="n">incomingWidgets</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span>  
+    <span class="n">_inheritedWidgets</span> <span class="o">=</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">Type</span><span class="o">,</span> <span class="n">InheritedElement</span><span class="o">&gt;.</span><span class="na">from</span><span class="o">(</span><span class="n">incomingWidgets</span><span class="o">);</span>  
+ <span class="k">else</span>  
+	 <span class="n">_inheritedWidgets</span> <span class="o">=</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">Type</span><span class="o">,</span> <span class="n">InheritedElement</span><span class="o">&gt;();</span>  
+  <span class="n">_inheritedWidgets</span><span class="o">[</span><span class="n">widget</span><span class="o">.</span><span class="na">runtimeType</span><span class="o">]</span> <span class="o">=</span> <span class="k">this</span><span class="o">;</span>  
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>这样，<code class="language-plaintext highlighter-rouge">MyModel</code>下的所有<code class="language-plaintext highlighter-rouge">Children</code>都可以获取到<code class="language-plaintext highlighter-rouge">MyModel</code>这个<em>Ancestor</em>，貌似有点<code class="language-plaintext highlighter-rouge">findViewById</code>的味道。</p>
+
+<p>状态管理参考<a href="https://flutter.dev/docs/development/data-and-backend/state-mgmt/intro">Flutter 官方文档</a></p>
+
+<!--stackedit_data:
+eyJoaXN0b3J5IjpbMTkxNDI1NDM3OCw4MTk1NTkzOTksLTE4ND
+kxMjE5NV19
+-->
+
+
+    <p class="signature">&mdash; Lenox&nbsp;Xian</p>
+  </div>
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Generics - Lenox&nbsp;Xian</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans SC:300,400,700" type="text/css">
+  <link rel="stylesheet" href="/static/app.css" type="text/css">
+  <link rel="stylesheet" href="/static/syntax.css" type="text/css">
+</head>
+
+<body>
+  <header>
+    <h1>Lenox&nbsp;Xian</h1>
+    <p>Everything negative-pressure，challenges-is all an opportunity for me to rise</p>
+  </header>
+
+  <div class="post_content">
+    <h2>Generics</h2>
+    <p class="date">10 September 2020</p>
+
+    <blockquote>
+  <p>这篇文章讨论一下Kotlin中的泛型</p>
+</blockquote>
+
+<h3 id="declaration-site-variance">declaration-site variance</h3>
+<p>在Java中，<code class="language-plaintext highlighter-rouge">Collection&lt;String&gt;</code>是<code class="language-plaintext highlighter-rouge">Collection&lt;? extends Object&gt;</code>的子类，因为该类型发生了协变(covariant)，根据PECS原则，此类型作为Producer只能生产数据。对于下面这个类：</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre><span class="kd">interface</span> <span class="nc">Producer</span><span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;</span> <span class="o">{</span>
+	<span class="no">T</span> <span class="nf">produce</span><span class="o">();</span>
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>这个类只有一个方法，它只能生产数据，并不能消耗数据，所以<code class="language-plaintext highlighter-rouge">Producer&lt;String&gt;</code>应该是<code class="language-plaintext highlighter-rouge">Producer&lt;Object&gt;</code>的子类，但Java编译器不知道，而且没有办法向Java编译器解释这种行为，所以Java禁止了它。</p>
+
+<p>但是在Kotlin中，可以向Kotlin编译器解释这种行为，这被称为：<strong>declaration-site variance</strong>。</p>
+
+<h4 id="variance-annotation---out修饰符">variance annotation - out修饰符</h4>
+<p>我们可以对<code class="language-plaintext highlighter-rouge">Producer</code>的类型参数（type parameter）T进行注释，以确保仅从<code class="language-plaintext highlighter-rouge">Producer&lt;T&gt;</code>的produce方法返回（产生）该参数，并且永不使用它。为此我们提供<code class="language-plaintext highlighter-rouge">out</code>修饰符（<strong>variance annotation</strong>）：</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre><span class="kd">interface</span> <span class="nc">Producer</span><span class="p">&lt;</span><span class="k">out</span> <span class="nc">T</span><span class="p">&gt;</span> <span class="p">{</span>  
+    <span class="k">fun</span> <span class="nf">produce</span><span class="p">():</span> <span class="nc">T</span>  
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>这样，Producer在类型参数T中是协变的，或者T是协变类型参数。我们可以将Producer视为T的生产者，而不是T的消费者。
+这样就完成下面转换：</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td><td class="rouge-code"><pre><span class="kd">val</span> <span class="py">stringProducer</span> <span class="p">=</span> <span class="kd">object</span> <span class="err">: </span><span class="nc">Producer</span><span class="p">&lt;</span><span class="nc">String</span><span class="p">&gt;</span> <span class="p">{</span>  
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">produce</span><span class="p">():</span> <span class="nc">String</span> <span class="p">=</span> <span class="s">"produce str"</span>  
+<span class="p">}</span>  
+  
+<span class="kd">val</span> <span class="py">anyProducer</span><span class="p">:</span> <span class="nc">Producer</span><span class="p">&lt;</span><span class="nc">Any</span><span class="p">&gt;</span> <span class="p">=</span> <span class="n">stringProducer</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h4 id="variance-annotation---in修饰符">variance annotation - in修饰符</h4>
+<p>相对于<code class="language-plaintext highlighter-rouge">out</code>修饰符使类型参数（type parameter）发生协变(covariant)，<code class="language-plaintext highlighter-rouge">in</code>修饰符使类型参数（type parameter）发生逆变(contravariance)，我们可以对<code class="language-plaintext highlighter-rouge">Consumer</code>的类型参数（type parameter）T进行<code class="language-plaintext highlighter-rouge">in</code>注释，以确保它只能被消耗而不能产生。这样我们可以将<code class="language-plaintext highlighter-rouge">Consumer</code>视为T的消费者而不是生产者。</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre><span class="kd">interface</span> <span class="nc">Consumer</span><span class="p">&lt;</span><span class="k">in</span> <span class="nc">T</span><span class="p">&gt;</span> <span class="p">{</span>  
+    <span class="k">fun</span> <span class="nf">consume</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="nc">T</span><span class="p">)</span>  
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>这样就完成下面转换：</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre></td><td class="rouge-code"><pre><span class="kd">val</span> <span class="py">anyConsumer</span> <span class="p">=</span> <span class="kd">object</span> <span class="err">: </span><span class="nc">Consumer</span><span class="p">&lt;</span><span class="nc">Any</span><span class="p">&gt;</span> <span class="p">{</span>  
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">consume</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="nc">Any</span><span class="p">)</span> <span class="p">{</span>  
+        <span class="nf">require</span><span class="p">(</span><span class="n">t</span> <span class="k">is</span> <span class="nc">String</span> <span class="p">&amp;&amp;</span> <span class="n">t</span> <span class="p">==</span> <span class="s">"string consumer"</span><span class="p">)</span>  
+    <span class="p">}</span>  
+<span class="p">}</span>  
+  
+<span class="kd">val</span> <span class="py">stringConsumer</span><span class="p">:</span> <span class="nc">Consumer</span><span class="p">&lt;</span><span class="nc">String</span><span class="p">&gt;</span> <span class="p">=</span> <span class="n">anyConsumer</span>  
+<span class="n">stringConsumer</span><span class="p">.</span><span class="nf">consume</span><span class="p">(</span><span class="s">"string consumer"</span><span class="p">)</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p><strong>Consumer in, Producer out</strong></p>
+
+<h3 id="type-projections">Type projections</h3>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">Array&lt;out String&gt;</code> 对应Java中的<code class="language-plaintext highlighter-rouge">Array&lt;? extends String&gt;</code>。</li>
+  <li><code class="language-plaintext highlighter-rouge">Array&lt;in String&gt;</code> 对应Java中的<code class="language-plaintext highlighter-rouge">Array&lt;? super String&gt;</code>。</li>
+</ul>
+
+<h3 id="generic-constraints">Generic constraints</h3>
+<p>上边界（Upper bounds）是泛型限制中最常见的限制类型，泛型默认的上边界是<code class="language-plaintext highlighter-rouge">Any?</code>，并且只能有一个上边界：
+<code class="language-plaintext highlighter-rouge">&lt;T: Number&gt;</code>。如果同一个类型参数需要一个以上的上限，则需要单独的<code class="language-plaintext highlighter-rouge">where</code>子句：</p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td><td class="rouge-code"><pre><span class="k">fun</span> <span class="p">&lt;</span><span class="nc">T</span><span class="p">&gt;</span> <span class="nf">copyWhenGreater</span><span class="p">(</span><span class="n">list</span><span class="p">:</span> <span class="nc">List</span><span class="p">&lt;</span><span class="nc">T</span><span class="p">&gt;,</span> <span class="n">threshold</span><span class="p">:</span> <span class="nc">T</span><span class="p">):</span> <span class="nc">List</span><span class="p">&lt;</span><span class="nc">String</span><span class="p">&gt;</span>  
+        <span class="k">where</span> <span class="nc">T</span> <span class="p">:</span> <span class="nc">CharSequence</span><span class="p">,</span>  
+		      <span class="nc">T</span> <span class="p">:</span> <span class="nc">Comparable</span><span class="p">&lt;</span><span class="nc">T</span><span class="p">&gt;</span> <span class="p">{</span>  
+    <span class="k">return</span> <span class="n">list</span><span class="p">.</span><span class="nf">filter</span> <span class="p">{</span> <span class="n">it</span> <span class="p">&gt;</span> <span class="n">threshold</span> <span class="p">}.</span><span class="nf">map</span> <span class="p">{</span> <span class="n">it</span><span class="p">.</span><span class="nf">toString</span><span class="p">()</span> <span class="p">}</span>  
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>传递的类型必须同时满足where子句的所有条件。在上面的示例中，T类型必须同时实现CharSequence和Comparable。</p>
+
+<h3 id="type-erasure">Type erasure</h3>
+<p>在泛型声明中，Kotlin仅仅在编译时（compile time）执行类型安全检查，而在运行时（runtime），泛型类型的实例不持有类型参数的实际任何信息（类型擦除），比如<code class="language-plaintext highlighter-rouge">Comparable&lt;String&gt;</code>实例在运行时会被擦除成<code class="language-plaintext highlighter-rouge">Comparable&lt;*&gt;</code>。</p>
+
+<p>因此，编译器禁止<code class="language-plaintext highlighter-rouge">comparable is Comparable&lt;String&gt;</code>。</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>Cannot check for instance of erased type: Comparable&lt;String&gt;
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>并且类型转换（Type casts）在运行时（runtime）是<em>unchecked</em>的：<code class="language-plaintext highlighter-rouge">comparable as Comparable&lt;String&gt;</code>。</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>Unchecked cast: Comparable&lt;T&gt; to Comparable&lt;String&gt;
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p><strong>内联函数的<code class="language-plaintext highlighter-rouge">reified</code>的类型参数被调用位置的内联函数主体中的实际类型参数替换，因此可以用于类型检查和强制转换</strong></p>
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre></td><td class="rouge-code"><pre><span class="k">inline</span> <span class="k">fun</span> <span class="p">&lt;</span><span class="k">reified</span> <span class="nc">T</span><span class="p">&gt;</span> <span class="nf">membersOf</span><span class="p">()</span> <span class="p">=</span> <span class="nc">T</span><span class="o">::</span><span class="k">class</span><span class="p">.</span><span class="n">members</span>
+
+<span class="k">inline</span> <span class="k">fun</span> <span class="p">&lt;</span><span class="k">reified</span> <span class="nc">T</span><span class="p">&gt;</span> <span class="nf">foo</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="nc">T</span><span class="p">):</span> <span class="nc">Int</span><span class="p">?</span> <span class="p">{</span>  
+    <span class="k">if</span> <span class="p">(</span><span class="n">t</span> <span class="k">is</span> <span class="nc">String</span><span class="p">)</span> <span class="p">{</span>  
+        <span class="k">return</span> <span class="p">(</span><span class="n">t</span> <span class="k">as</span> <span class="nc">String</span><span class="p">).</span><span class="nf">toIntOrNull</span><span class="p">()</span>  
+    <span class="p">}</span>  
+    <span class="k">if</span> <span class="p">(</span><span class="n">t</span> <span class="k">is</span> <span class="nc">Int</span><span class="p">)</span> <span class="k">return</span> <span class="n">t</span>  
+    <span class="k">if</span> <span class="p">(</span><span class="n">t</span> <span class="k">is</span> <span class="nc">Int</span><span class="p">?)</span> <span class="k">return</span> <span class="n">t</span>  
+    <span class="k">return</span> <span class="k">null</span>  
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<!--stackedit_data:
+eyJoaXN0b3J5IjpbODgyNzQ4NDIzLC0xNzMzMjE3Mjk4LDE2Mz
+c4NDQ3MjMsMjUxODM2MzE4LC0xNTUwNDQ2MTMxLC04MzA2MDcy
+OTIsMTg4OTgxNDYyOCw3MzA5OTgxMTZdfQ==
+-->
+
+
+    <p class="signature">&mdash; Lenox&nbsp;Xian</p>
+  </div>
+  </script>
+</body>
+
+</html>

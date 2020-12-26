@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stream - Lenox&nbsp;Xian</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans SC:300,400,700" type="text/css">
+  <link rel="stylesheet" href="/static/app.css" type="text/css">
+  <link rel="stylesheet" href="/static/syntax.css" type="text/css">
+</head>
+
+<body>
+  <header>
+    <h1>Lenox&nbsp;Xian</h1>
+    <p>Everything negative-pressure，challenges-is all an opportunity for me to rise</p>
+  </header>
+
+  <div class="post_content">
+    <h2>Stream</h2>
+    <p class="date">26 July 2020</p>
+
+    <blockquote>
+  <p>这篇文章讨论以下Dart中的Stream。</p>
+</blockquote>
+
+<p>在Dart中，如果我们向要返回多个值，可以使用<code class="language-plaintext highlighter-rouge">Iterable</code>和 <code class="language-plaintext highlighter-rouge">Stream</code>。
+当每个值都需要经过耗时计算而得（比如每次计算耗时1s），如果使用<code class="language-plaintext highlighter-rouge">Iterable</code>，可以这样：</p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td><td class="rouge-code"><pre><span class="n">Iterable</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">genSnc</span><span class="o">()</span> <span class="n">sync</span><span class="o">*</span> <span class="o">{</span>  
+  <span class="k">for</span> <span class="o">(</span><span class="kd">var</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>  
+    <span class="n">sleep</span><span class="o">(</span><span class="n">Duration</span><span class="o">(</span><span class="nl">seconds:</span> <span class="mi">1</span><span class="o">));</span>  
+	<span class="n">yield</span> <span class="n">i</span><span class="o">;</span>  
+  <span class="o">}</span>  
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>但是这里的<code class="language-plaintext highlighter-rouge">sleep</code>是占用CPU的 <em>Blocking</em> 操作，运行这段代码会阻塞主线程，这在Flutter中是不允许的。
+于是我们想到可以使用异步计算替代同步计算，这时候我们就需要使用<code class="language-plaintext highlighter-rouge">Stream</code>来替代<code class="language-plaintext highlighter-rouge">Iterable</code>：</p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td><td class="rouge-code"><pre><span class="n">Stream</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">genAsync</span><span class="o">()</span> <span class="n">async</span><span class="o">*</span> <span class="o">{</span>  
+  <span class="k">for</span> <span class="o">(</span><span class="kd">var</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>  
+    <span class="n">await</span> <span class="n">Future</span><span class="o">.</span><span class="na">delayed</span><span class="o">(</span><span class="n">Duration</span><span class="o">(</span><span class="nl">seconds:</span> <span class="mi">1</span><span class="o">));</span>  
+	<span class="n">yield</span> <span class="n">i</span><span class="o">;</span>  
+  <span class="o">}</span>  
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<h3 id="cold-stream">Cold Stream</h3>
+<p><code class="language-plaintext highlighter-rouge">Stream</code> 类似于<code class="language-plaintext highlighter-rouge">Iterable</code>，是一个冷流，这一味这上述的 <em>Asynchronous generator</em> 只有当<code class="language-plaintext highlighter-rouge">Stream</code> 开始 <code class="language-plaintext highlighter-rouge">listen</code> 或 <code class="language-plaintext highlighter-rouge">await for</code> 的时候才会执行（<em>Synchronous  generator</em> 只有当 <code class="language-plaintext highlighter-rouge">Iterable</code> 开始迭代的时候才会执行）。</p>
+
+<h3 id="await-for">await for</h3>
+<p>当我们需要从<code class="language-plaintext highlighter-rouge">Stream</code>获取值时，除了使用 <a href="https://dart.dev/guides/libraries/library-tour#stream">Stream API</a>，还可以使用<code class="language-plaintext highlighter-rouge">async</code>和<code class="language-plaintext highlighter-rouge">async for</code>（<em>asynchronous for loop</em>）：</p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td><td class="rouge-code"><pre><span class="kt">void</span> <span class="nf">forEachStream</span><span class="p">(</span><span class="o">)</span> <span class="n">async</span> <span class="o">{</span>  
+  <span class="n">await</span> <span class="k">for</span><span class="o">(</span><span class="kd">var</span> <span class="n">value</span> <span class="k">in</span> <span class="n">genAsync</span><span class="o">())</span> <span class="o">{</span>  
+    <span class="n">print</span><span class="o">(</span><span class="n">value</span><span class="o">);</span>  
+  <span class="o">}</span>  
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>该<em>for循环</em>直到<code class="language-plaintext highlighter-rouge">Stream</code> <em>emit</em>一个值时一直处于<em>wait</em>状态；当<code class="language-plaintext highlighter-rouge">Stream</code> <em>emit</em>一个值后，执行循环体并将<code class="language-plaintext highlighter-rouge">value</code>设置为<em>emit</em>的值；然后这样循环执行直到<code class="language-plaintext highlighter-rouge">Stream</code> 处于<em>closed</em>状态。
+<em>for循环</em>的<code class="language-plaintext highlighter-rouge">break</code>或<code class="language-plaintext highlighter-rouge">return</code>将打破<em>for循环</em>并取消订阅流。</p>
+
+<h3 id="如何创建stream">如何创建Stream</h3>
+<p>除了使用<em>Asynchronous generator</em>， 还可以使用<code class="language-plaintext highlighter-rouge">StreamController</code>来创建<code class="language-plaintext highlighter-rouge">Stream</code>。<code class="language-plaintext highlighter-rouge">StreamController</code>可以创建两种类型的<code class="language-plaintext highlighter-rouge">Stream</code>：</p>
+<h4 id="支持单次订阅的stream">支持单次订阅的<code class="language-plaintext highlighter-rouge">Stream</code>:</h4>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td><td class="rouge-code"><pre><span class="kd">final</span> <span class="n">controller</span> <span class="o">=</span> <span class="n">StreamController</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;();</span>  
+<span class="kd">final</span> <span class="n">stream</span> <span class="o">=</span> <span class="n">controller</span><span class="o">.</span><span class="na">stream</span><span class="o">;</span>  
+<span class="n">stream</span><span class="o">.</span><span class="na">listen</span><span class="o">(</span><span class="n">print</span><span class="o">);</span>  
+<span class="n">stream</span><span class="o">.</span><span class="na">listen</span><span class="o">(</span><span class="n">print</span><span class="o">);</span>  
+<span class="n">controller</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="mi">10</span><span class="o">);</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>这将抛出异常：</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre></td><td class="rouge-code"><pre>Unhandled exception:
+Bad state: Stream has already been listened to.
+#0      _StreamController._subscribe (dart:async/stream_controller.dart:710:7)
+#1      _ControllerStream._createSubscription (dart:async/stream_controller.dart:860:19)
+#2      _StreamImpl.listen (dart:async/stream_impl.dart:493:9)
+#3      main (file:///home/xianxueliang/IdeaProjects/dart_app/bin/dart_app.dart:9:10)
+#4      _startIsolate.&lt;anonymous closure&gt; (dart:isolate-patch/isolate_patch.dart:299:32)
+#5      _RawReceivePortImpl._handleMessage (dart:isolate-patch/isolate_patch.dart:168:12)
+</pre></td></tr></tbody></table></code></pre></div></div>
+<h4 id="支持多次订阅的streambroadcast-stream">支持多次订阅的<code class="language-plaintext highlighter-rouge">Stream</code>（<em>broadcast stream</em>）:</h4>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td><td class="rouge-code"><pre><span class="kd">final</span> <span class="n">controller</span> <span class="o">=</span> <span class="n">StreamController</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;.</span><span class="na">broadcast</span><span class="o">();</span>  
+<span class="kd">final</span> <span class="n">stream</span> <span class="o">=</span> <span class="n">controller</span><span class="o">.</span><span class="na">stream</span><span class="o">;</span>  
+<span class="n">stream</span><span class="o">.</span><span class="na">listen</span><span class="o">(</span><span class="n">print</span><span class="o">);</span>  
+<span class="n">stream</span><span class="o">.</span><span class="na">listen</span><span class="o">(</span><span class="n">print</span><span class="o">);</span>  
+<span class="n">controller</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="mi">10</span><span class="o">);</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>这将输出：</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>10
+10
+</pre></td></tr></tbody></table></code></pre></div></div>
+<h3 id="asyncsync-streamcontroller">Async/Sync StreamController</h3>
+<p>当你创建一个	<code class="language-plaintext highlighter-rouge">StreamController</code>的时候，有一个<em>Named Parameter</em>-<code class="language-plaintext highlighter-rouge">sync</code>来控制<code class="language-plaintext highlighter-rouge">StreamController</code>是<em>Sync</em>还是<em>Async</em>，<em>Sync StreamController</em>相比<em>Async StreamController</em>的唯一优势在于低延迟：当向<code class="language-plaintext highlighter-rouge">Stream</code>添加一个<em>event</em>的时候，<em>Async StreamController</em>会将这个<em>Event</em>包装成为<code class="language-plaintext highlighter-rouge">_DelayedEvent</code>，然后通过<code class="language-plaintext highlighter-rouge">scheduleMicrotask</code> 异步调度这个<code class="language-plaintext highlighter-rouge">_DelayedEvent</code>将其转发给<em>Subscriber</em>，所以会有一定的延迟；和<em>Async StreamController</em>相反，<em>Sync StreamController</em>会立刻将<em>event</em>转发给<em>Subscriber</em>，延迟只因程序的执行而产生，所以可以视为无延迟。
+<strong>Note：官方推荐使用 non-sync 版本。</strong></p>
+
+<h3 id="streamtransformer">StreamTransformer</h3>
+<p>和<code class="language-plaintext highlighter-rouge">Iterable</code>一样，<code class="language-plaintext highlighter-rouge">Stream</code>也需要一些中间操作来丰富自己-如<code class="language-plaintext highlighter-rouge">Stream</code>中<em>events</em>的<code class="language-plaintext highlighter-rouge">map</code>，<code class="language-plaintext highlighter-rouge">filter</code>等等。当然，这些都已经存在于<code class="language-plaintext highlighter-rouge">Stream</code>的核心API中，但是我们可能还需要类似 <code class="language-plaintext highlighter-rouge">timestamp</code>（包装原始<em>event</em>，使其增加时间辍）等等这些拓展API，这时候需要我们自己拓展<code class="language-plaintext highlighter-rouge">Stream</code>。我们借助<code class="language-plaintext highlighter-rouge">Stream</code>的<code class="language-plaintext highlighter-rouge">transform</code>函数来完成<em>Source Stream</em>向<em>Target Stream</em>的转化。这里以<a href="https://pub.dev/packages/rxdart">rxdart</a>中的<code class="language-plaintext highlighter-rouge">timestamp</code>拓展函数来演示：
+首先我们定义自己的<code class="language-plaintext highlighter-rouge">StreamTransformer</code>：</p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre></td><td class="rouge-code"><pre><span class="kd">class</span> <span class="nc">TimestampStreamTransformer</span><span class="o">&lt;</span><span class="n">S</span><span class="o">&gt;</span>  
+    <span class="kd">extends</span> <span class="n">StreamTransformerBase</span><span class="o">&lt;</span><span class="n">S</span><span class="o">,</span> <span class="n">Timestamped</span><span class="o">&lt;</span><span class="n">S</span><span class="o">&gt;&gt;</span> <span class="o">{</span>  
+ <span class="c1">/// Constructs a [StreamTransformer] which emits events from the  </span>
+ <span class="c1">/// source [Stream] as snapshots in the form of [Timestamped]. </span>
+ <span class="n">TimestampStreamTransformer</span><span class="o">();</span>  
+  
+  <span class="nd">@override</span>  
+  <span class="n">Stream</span><span class="o">&lt;</span><span class="n">Timestamped</span><span class="o">&lt;</span><span class="n">S</span><span class="o">&gt;&gt;</span> <span class="n">bind</span><span class="o">(</span><span class="n">Stream</span><span class="o">&lt;</span><span class="n">S</span><span class="o">&gt;</span> <span class="n">stream</span><span class="o">)</span> <span class="o">=&gt;</span>  
+      <span class="n">Stream</span><span class="o">.</span><span class="na">eventTransformed</span><span class="o">(</span><span class="n">stream</span><span class="o">,</span> <span class="o">(</span><span class="n">sink</span><span class="o">)</span> <span class="o">=&gt;</span> <span class="n">_TimestampStreamSink</span><span class="o">&lt;</span><span class="n">S</span><span class="o">&gt;(</span><span class="n">sink</span><span class="o">));</span>  
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>当然，这里的<code class="language-plaintext highlighter-rouge">bind</code>就是真正进行<code class="language-plaintext highlighter-rouge">Stream</code>转换的地方，你可以使用其他方法来实现：如创建<em>output stream</em>，然后<em>listen source stream</em>，然后转发<em>Source Stream</em>的<em>events</em>给<em>output stream</em>，然后在转发的过程中实现<em>wrap timestamp</em>的目的。这也是库<a href="https://pub.dev/packages/stream_transform">stream_transform</a>的通用做法。使用官方API<code class="language-plaintext highlighter-rouge">Stream.eventTransformed</code>当然更简单一些，当然目的都是为了实现<em>event</em>的<em>transform</em>。</p>
+
+<p>然后创建<code class="language-plaintext highlighter-rouge">Stream</code>的拓展类应用这个<code class="language-plaintext highlighter-rouge">StreamTransformer</code>：</p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre></td><td class="rouge-code"><pre><span class="n">extension</span> <span class="n">TimeStampExtension</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="n">on</span> <span class="n">Stream</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="o">{</span>  
+  <span class="n">Stream</span><span class="o">&lt;</span><span class="n">Timestamped</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&gt;</span> <span class="n">timestamp</span><span class="o">()</span> <span class="o">=&gt;</span>  
+      <span class="n">transform</span><span class="o">(</span><span class="n">TimestampStreamTransformer</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;());</span>  
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="部分官方api介绍">部分官方API介绍</h3>
+<h4 id="expand">expand</h4>
+<p>将<em>Source Stream</em>中的每个<em>event</em>通过<code class="language-plaintext highlighter-rouge">convert</code>转换成多个元素序列然后<em>emit</em>给<em>Target Stream</em>：</p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+</pre></td><td class="rouge-code"><pre><span class="kd">final</span> <span class="n">map</span> <span class="o">=</span> <span class="o">&lt;</span><span class="kt">String</span><span class="o">,</span> <span class="n">Iterable</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;&gt;{</span>  
+  <span class="s">'even'</span><span class="o">:</span> <span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;[</span><span class="mi">0</span><span class="o">,</span> <span class="mi">2</span><span class="o">,</span> <span class="mi">4</span><span class="o">,</span> <span class="mi">6</span><span class="o">,</span> <span class="mi">8</span><span class="o">,</span> <span class="mi">10</span><span class="o">],</span>  
+  <span class="s">'odd'</span><span class="o">:</span> <span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;[</span><span class="mi">1</span><span class="o">,</span> <span class="mi">3</span><span class="o">,</span> <span class="mi">5</span><span class="o">,</span> <span class="mi">7</span><span class="o">,</span> <span class="mi">9</span><span class="o">]</span>  
+<span class="o">};</span>  
+<span class="kd">final</span> <span class="n">c</span> <span class="o">=</span> <span class="n">StreamController</span><span class="o">&lt;</span><span class="kt">String</span><span class="o">&gt;(</span><span class="nl">sync:</span> <span class="kc">true</span><span class="o">);</span>  
+<span class="n">c</span><span class="o">.</span><span class="na">stream</span><span class="o">.</span><span class="na">expand</span><span class="o">((</span><span class="n">element</span><span class="o">)</span> <span class="o">=&gt;</span> <span class="n">map</span><span class="o">[</span><span class="n">element</span><span class="o">]).</span><span class="na">forEach</span><span class="o">(</span><span class="n">print</span><span class="o">);</span>  
+  
+<span class="n">map</span><span class="o">.</span><span class="na">keys</span><span class="o">.</span><span class="na">forEach</span><span class="o">(</span><span class="n">c</span><span class="o">.</span><span class="na">add</span><span class="o">);</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>这将会输出0~10所有的自然数：</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre></td><td class="rouge-code"><pre>0
+2
+4
+6
+8
+10
+1
+3
+5
+7
+9
+</pre></td></tr></tbody></table></code></pre></div></div>
+<h4 id="pipe">pipe</h4>
+<p>将当前<code class="language-plaintext highlighter-rouge">Stream</code>中的<em>events</em>通过管道发送给另一个<code class="language-plaintext highlighter-rouge">StreamConsumer</code></p>
+<div class="language-dart highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre></td><td class="rouge-code"><pre><span class="kd">final</span> <span class="n">sourceController</span> <span class="o">=</span> <span class="n">StreamController</span><span class="o">&lt;</span><span class="kt">String</span><span class="o">&gt;(</span><span class="nl">sync:</span> <span class="kc">true</span><span class="o">);</span>  
+<span class="kd">final</span> <span class="n">targetController</span> <span class="o">=</span> <span class="n">StreamController</span><span class="o">&lt;</span><span class="kt">String</span><span class="o">&gt;(</span><span class="nl">sync:</span> <span class="kc">true</span><span class="o">);</span>  
+  
+<span class="n">sourceController</span><span class="o">.</span><span class="na">stream</span><span class="o">.</span><span class="na">pipe</span><span class="o">(</span><span class="n">targetController</span><span class="o">);</span>  
+  
+<span class="c1">// listen  </span>
+<span class="n">targetController</span><span class="o">.</span><span class="na">stream</span><span class="o">.</span><span class="na">listen</span><span class="o">(</span><span class="n">print</span><span class="o">);</span>
+  
+<span class="c1">// send  </span>
+<span class="n">sourceController</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="s">'event from sourceController'</span><span class="o">);</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>这将会在控制台上打印出：</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>event from sourceController
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="受欢迎的stream拓展库">受欢迎的Stream拓展库</h3>
+<ul>
+  <li><a href="https://pub.dev/packages/rxdart">rxdart</a></li>
+  <li><a href="https://pub.dev/packages/stream_transform">stream_transform</a>
+<!--stackedit_data:
+eyJoaXN0b3J5IjpbMTU5Njg4MjY2OCwxNzE5MzMxNjM0LDIwND
+c2OTI0NTEsMTU0MDY3MjM5MCwyMDUyMTIyNDA3LC01MTAwODU3
+NCwxNjU4MjIwMjUxLC0xMDAxNTQ4ODYyLC00NjYxMDcxLC0xMD
+QwNzE3MzMsLTEwMjQwOTAxNTIsLTEwNTYzODUzNzNdfQ==
+--></li>
+</ul>
+
+
+    <p class="signature">&mdash; Lenox&nbsp;Xian</p>
+  </div>
+  </script>
+</body>
+
+</html>

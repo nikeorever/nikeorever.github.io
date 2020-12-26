@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mysql Account privileges - Lenox&nbsp;Xian</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans SC:300,400,700" type="text/css">
+  <link rel="stylesheet" href="/static/app.css" type="text/css">
+  <link rel="stylesheet" href="/static/syntax.css" type="text/css">
+</head>
+
+<body>
+  <header>
+    <h1>Lenox&nbsp;Xian</h1>
+    <p>Everything negative-pressure，challenges-is all an opportunity for me to rise</p>
+  </header>
+
+  <div class="post_content">
+    <h2>Mysql Account privileges</h2>
+    <p class="date">16 August 2020</p>
+
+    <h4 id="创建用户">创建用户</h4>
+<pre><code class="language-mysql">mysql&gt; CREATE USER 'your_username'@'host_ip_addr' IDENTIFIED BY 'your_pwd';
+</code></pre>
+<p><code class="language-plaintext highlighter-rouge">host_ip_addr</code> 是你要从其连接到MySQL 服务器的计算机的主机名或IP地址</p>
+<ul>
+  <li>如果要从任何计算机连接，也可以将<code class="language-plaintext highlighter-rouge">％</code>用作host_ip_addr；</li>
+  <li>如果要从IP范围192.168.2.1 – 192.168.2.254的计算机进行连接，也可以是192.168.2.％之类的内容;</li>
+</ul>
+
+<h4 id="分配权限">分配权限</h4>
+<pre><code class="language-mysql">mysql&gt; GRANT ALL PRIVILEGES ON db_name.tab_name TO 'your_username'@'host_ip_addr' WITH GRANT OPTION;
+</code></pre>
+<p><code class="language-plaintext highlighter-rouge">db_name</code> 是允许访问的数据库名称，<code class="language-plaintext highlighter-rouge">*</code> 表示任意数据库。
+<code class="language-plaintext highlighter-rouge">tab_name</code> 是允许访问的表名称，<code class="language-plaintext highlighter-rouge">*</code> 表示任意表。
+<code class="language-plaintext highlighter-rouge">ALL PRIVILEGES</code> 代表全局或者全数据库对象级别的所有权限。</p>
+
+<h4 id="刷新权限">刷新权限</h4>
+<pre><code class="language-mysql">mysql&gt; FLUSH PRIVILEGES;
+</code></pre>
+
+<h4 id="查询用户">查询用户</h4>
+<pre><code class="language-mysql">mysql&gt; USE mysql;
+mysql&gt; SELECT host, user, plugin FROM user;
++------------+------------------+-----------------------+
+| host       | user             | plugin                |
++------------+------------------+-----------------------+
+| %          | ghost            | caching_sha2_password |
+| 172.17.0.% | root             | caching_sha2_password |
+| localhost  | mysql.infoschema | caching_sha2_password |
+| localhost  | mysql.session    | caching_sha2_password |
+| localhost  | mysql.sys        | caching_sha2_password |
+| localhost  | root             | caching_sha2_password |
++------------+------------------+-----------------------+
+6 rows in set (0.00 sec)
+</code></pre>
+
+<h4 id="如何允许远程访问mysql-community--osfedora-">如何允许远程访问MYSQL Community ( OS：Fedora )</h4>
+<h5 id="添加新的规则到防火墙--firewalld">添加新的规则到防火墙 ( Firewalld)</h5>
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre><span class="nb">sudo </span>firewall-cmd <span class="nt">--permanent</span> <span class="nt">--zone</span><span class="o">=</span>public <span class="nt">--add-service</span><span class="o">=</span>mysql
+OR
+<span class="nb">sudo </span>firewall-cmd <span class="nt">--permanent</span> <span class="nt">--zone</span><span class="o">=</span>public <span class="nt">--add-port</span><span class="o">=</span>3306/tcp
+</pre></td></tr></tbody></table></code></pre></div></div>
+<h5 id="重启-firewalldservice">重启 firewalld.service</h5>
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre><span class="nb">sudo </span>systemctl restart firewalld.service
+</pre></td></tr></tbody></table></code></pre></div></div>
+<h5 id="编辑-mysql-community-配置文件">编辑 MYSQL Community 配置文件</h5>
+<p>编辑 <code class="language-plaintext highlighter-rouge">/etc/my.cnf.d/community-mysql-server.cnf</code>， 导航到以<code class="language-plaintext highlighter-rouge">bind-address</code>指令开头的行。将此指令设置为通配符IP地址<code class="language-plaintext highlighter-rouge">*</code>,<code class="language-plaintext highlighter-rouge">::</code>或<code class="language-plaintext highlighter-rouge">0.0.0.0</code>：</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>bind-address            = 0.0.0.0
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>保存重启MYSQL服务</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+</pre></td><td class="rouge-code"><pre>sudo systemctl restart mysqld
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<!--stackedit_data:
+eyJoaXN0b3J5IjpbMTUyNDUzMTgzMV19
+-->
+
+
+    <p class="signature">&mdash; Lenox&nbsp;Xian</p>
+  </div>
+  </script>
+</body>
+
+</html>
