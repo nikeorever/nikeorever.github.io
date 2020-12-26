@@ -2,8 +2,7 @@ deploy:
 	git checkout trunk
 	git add -A
 	git commit -m "Deploy blog"
-    # git add -A
-    # git commit -m "Deploy blog"
+	
     # cp -r _site/ /tmp/
     # git checkout gh-pages
     # rm -r ./*
