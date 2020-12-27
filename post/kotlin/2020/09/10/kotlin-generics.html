@@ -33,7 +33,7 @@
 2
 3
 </pre></td><td class="rouge-code"><pre><span class="kd">interface</span> <span class="nc">Producer</span><span class="o">&lt;</span><span class="no">T</span><span class="o">&gt;</span> <span class="o">{</span>
-	<span class="no">T</span> <span class="nf">produce</span><span class="o">();</span>
+    <span class="no">T</span> <span class="nf">produce</span><span class="o">();</span>
 <span class="o">}</span>
 </pre></td></tr></tbody></table></code></pre></div></div>
 <p>这个类只有一个方法，它只能生产数据，并不能消耗数据，所以<code class="language-plaintext highlighter-rouge">Producer&lt;String&gt;</code>应该是<code class="language-plaintext highlighter-rouge">Producer&lt;Object&gt;</code>的子类，但Java编译器不知道，而且没有办法向Java编译器解释这种行为，所以Java禁止了它。</p>
@@ -107,8 +107,8 @@
 4
 5
 </pre></td><td class="rouge-code"><pre><span class="k">fun</span> <span class="p">&lt;</span><span class="nc">T</span><span class="p">&gt;</span> <span class="nf">copyWhenGreater</span><span class="p">(</span><span class="n">list</span><span class="p">:</span> <span class="nc">List</span><span class="p">&lt;</span><span class="nc">T</span><span class="p">&gt;,</span> <span class="n">threshold</span><span class="p">:</span> <span class="nc">T</span><span class="p">):</span> <span class="nc">List</span><span class="p">&lt;</span><span class="nc">String</span><span class="p">&gt;</span>  
-        <span class="k">where</span> <span class="nc">T</span> <span class="p">:</span> <span class="nc">CharSequence</span><span class="p">,</span>  
-		      <span class="nc">T</span> <span class="p">:</span> <span class="nc">Comparable</span><span class="p">&lt;</span><span class="nc">T</span><span class="p">&gt;</span> <span class="p">{</span>  
+        <span class="k">where</span> <span class="nc">T</span> <span class="p">:</span> <span class="nc">CharSequence</span><span class="p">,</span>
+              <span class="nc">T</span> <span class="p">:</span> <span class="nc">Comparable</span><span class="p">&lt;</span><span class="nc">T</span><span class="p">&gt;</span> <span class="p">{</span>  
     <span class="k">return</span> <span class="n">list</span><span class="p">.</span><span class="nf">filter</span> <span class="p">{</span> <span class="n">it</span> <span class="p">&gt;</span> <span class="n">threshold</span> <span class="p">}.</span><span class="nf">map</span> <span class="p">{</span> <span class="n">it</span><span class="p">.</span><span class="nf">toString</span><span class="p">()</span> <span class="p">}</span>  
 <span class="p">}</span>
 </pre></td></tr></tbody></table></code></pre></div></div>

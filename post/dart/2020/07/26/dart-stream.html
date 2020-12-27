@@ -37,8 +37,8 @@
 6
 </pre></td><td class="rouge-code"><pre><span class="n">Iterable</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">genSnc</span><span class="o">()</span> <span class="n">sync</span><span class="o">*</span> <span class="o">{</span>  
   <span class="k">for</span> <span class="o">(</span><span class="kd">var</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>  
-    <span class="n">sleep</span><span class="o">(</span><span class="n">Duration</span><span class="o">(</span><span class="nl">seconds:</span> <span class="mi">1</span><span class="o">));</span>  
-	<span class="n">yield</span> <span class="n">i</span><span class="o">;</span>  
+    <span class="n">sleep</span><span class="o">(</span><span class="n">Duration</span><span class="o">(</span><span class="nl">seconds:</span> <span class="mi">1</span><span class="o">));</span>
+    <span class="n">yield</span> <span class="n">i</span><span class="o">;</span>  
   <span class="o">}</span>  
 <span class="o">}</span>
 </pre></td></tr></tbody></table></code></pre></div></div>
@@ -52,8 +52,8 @@
 6
 </pre></td><td class="rouge-code"><pre><span class="n">Stream</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span> <span class="n">genAsync</span><span class="o">()</span> <span class="n">async</span><span class="o">*</span> <span class="o">{</span>  
   <span class="k">for</span> <span class="o">(</span><span class="kd">var</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>  
-    <span class="n">await</span> <span class="n">Future</span><span class="o">.</span><span class="na">delayed</span><span class="o">(</span><span class="n">Duration</span><span class="o">(</span><span class="nl">seconds:</span> <span class="mi">1</span><span class="o">));</span>  
-	<span class="n">yield</span> <span class="n">i</span><span class="o">;</span>  
+    <span class="n">await</span> <span class="n">Future</span><span class="o">.</span><span class="na">delayed</span><span class="o">(</span><span class="n">Duration</span><span class="o">(</span><span class="nl">seconds:</span> <span class="mi">1</span><span class="o">));</span>
+    <span class="n">yield</span> <span class="n">i</span><span class="o">;</span>  
   <span class="o">}</span>  
 <span class="o">}</span>
 </pre></td></tr></tbody></table></code></pre></div></div>
@@ -142,9 +142,7 @@ Bad state: Stream has already been listened to.
 7
 8
 9
-10
-</pre></td><td class="rouge-code"><pre><span class="kd">class</span> <span class="nc">TimestampStreamTransformer</span><span class="o">&lt;</span><span class="n">S</span><span class="o">&gt;</span>  
-    <span class="kd">extends</span> <span class="n">StreamTransformerBase</span><span class="o">&lt;</span><span class="n">S</span><span class="o">,</span> <span class="n">Timestamped</span><span class="o">&lt;</span><span class="n">S</span><span class="o">&gt;&gt;</span> <span class="o">{</span>  
+</pre></td><td class="rouge-code"><pre><span class="kd">class</span> <span class="nc">TimestampStreamTransformer</span><span class="o">&lt;</span><span class="n">S</span><span class="o">&gt;</span> <span class="kd">extends</span> <span class="n">StreamTransformerBase</span><span class="o">&lt;</span><span class="n">S</span><span class="o">,</span> <span class="n">Timestamped</span><span class="o">&lt;</span><span class="n">S</span><span class="o">&gt;&gt;</span> <span class="o">{</span>  
  <span class="c1">/// Constructs a [StreamTransformer] which emits events from the  </span>
  <span class="c1">/// source [Stream] as snapshots in the form of [Timestamped]. </span>
  <span class="n">TimestampStreamTransformer</span><span class="o">();</span>  
