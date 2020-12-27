@@ -6,6 +6,8 @@
     --date-color: #aaa;
     --header-background-color: hsl(151,44.7%,50%);
     --header-foreground-color: #fff;
+    --code-background-color: #f6f6f6;
+    --code-foreground-color: #444;
 }
 html {
     height: 100%;
@@ -39,6 +41,19 @@ li {
 .date {
     font-size: 15px;
     color: var(--date-color);
+}
+
+code {
+    color: var(--code-foreground-color);
+    background-color: var(--code-background-color);
+}
+pre code {
+    overflow-x: auto;
+    overflow-wrap: normal;
+    white-space: pre;
+}
+blockquote {
+    font-size: 15px;
 }
 
 
