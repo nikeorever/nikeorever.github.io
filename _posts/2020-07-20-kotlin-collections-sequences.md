@@ -10,9 +10,9 @@ categories: post
 
 和往常一样，我们从一个例子开始。现在我们有一些填充了各种颜色的形状-*绿色的圆形*，*蓝色的矩形*，*红色的菱形*，*黑色的三角形*，我们将这些五彩斑斓的形状存入一个`List`中，然后通过`map`操作将这些形状的颜色全部更改成*红色*，最后通过`first`操作筛选出第一个形状为*矩形*的形状。代码如下所示：
 ```kotlin
-listOf<Shape>(Round(Color.GREEN), Rectangle(Color.BLUE), Diamond(Color.RED), Triangle(Color.BLACK))  
-        .map { it.copy(Color.RED) }  
-		.first { it is Rectangle }
+listOf<Shape>(Round(Color.GREEN), Rectangle(Color.BLUE), Diamond(Color.RED), Triangle(Color.BLACK))
+    .map { it.copy(Color.RED) }
+    .first { it is Rectangle }
 ```
 先考虑第一个问题：这段程序的目的是为了获取到列表中的第一个*矩形*，并且，这个矩形的颜色要通过`map`将原来的*蓝色*转换成*红色*，那其实列表中的除矩形以外的其他形状其实都没有必要做`map`映射。这些无意义的*operation*势必会随着数据量的增大为应用带来不必要的负担。
 
@@ -24,10 +24,10 @@ public inline fun <T, R> Iterable<T>.map(transform: (T) -> R): List<R> {
 ```
 为了解决以上两个问题，*Kotlin*推出了独立于集合框架的新的标准库容器类-*Sequence*，和集合一样， 它提供了相同的函数，所以可以在不用修改原有程序的基础上进行*Collection*与*Sequence*的方便转化，但是实现却完全不一样：传统的集合的多步操作中每一步都是*提前*评估和执行，并且会产生一个*中间（intermediate）*集合；而*Sequence*将多步操作分为两类：中间操作（Intermediate）和终端操作（Terminal），所有的*中间操作*都是尽可能惰性的，只有终端操作开始执行的时候，这些中间操作链才会开始执行，而且没有中间集合的产生。很重要的一点，相对与集合中是完成整个集合的每个步骤，然后进行下一步，*Sequence*对每个元素一个一个地执行所有处理步骤（*one by one*）。
 ```kotlin
-listOf<Shape>(Round(Color.GREEN), Rectangle(Color.BLUE), Diamond(Color.RED), Triangle(Color.BLACK))  
-		.asSequence()
-        .map { it.copy(Color.RED) }  
-		.first { it is Rectangle }
+listOf<Shape>(Round(Color.GREEN), Rectangle(Color.BLUE), Diamond(Color.RED), Triangle(Color.BLACK))
+    .asSequence()
+    .map { it.copy(Color.RED) }
+    .first { it is Rectangle }
 ```
 为了更加形象的查看两种容器的执行过程，我们为每个步骤增加后打印。结果如下：
 ```

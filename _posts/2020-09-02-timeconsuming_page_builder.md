@@ -37,21 +37,22 @@ import 'package:timeconsuming_page_builder/timeconsuming_page_builder.dart';
 Widget build(BuildContext context) {  
   final post = ModalRoute.of(context).settings.arguments as Post;  
   return Scaffold(  
-    appBar: AppBar(...),  
-	body: TimeConsumingPageBuilder<ResponseBody>(  
-        futureBuilder: () => Api(dartrofit).getContent(post.path),  
-		waitingWidgetBuilder: (BuildContext context) => ...,  
-		errorWidgetBuilder: (BuildContext context, RetryCaller caller) => ...,  
+    appBar: AppBar(...),
+    body: TimeConsumingPageBuilder<ResponseBody>(  
+        futureBuilder: () => Api(dartrofit).getContent(post.path),
+        waitingWidgetBuilder: (BuildContext context) => ...,
+        errorWidgetBuilder: (BuildContext context, RetryCaller caller) => ...,
         dataWidgetBuilder: (BuildContext context, ResponseBody body) {  
           if (body.string.orEmpty().isEmpty) {  
-            return BuiltInEmptyWidget();  
-		  }  
+            return BuiltInEmptyWidget();
+          }  
           return SafeArea(child: Markdown(controller: controller,
-		        selectable: true, 
-		        data: body.string));  
-		}
-	),
-   ); 
+                      selectable: true,
+                      data: body.string)
+          );
+        }
+    ),
+  ); 
 }
 ```
 #### [Github](https://github.com/nikeorever/timeconsuming_page_builder)

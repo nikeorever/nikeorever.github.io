@@ -12,7 +12,7 @@ categories: post
 在Java中，`Collection<String>`是`Collection<? extends Object>`的子类，因为该类型发生了协变(covariant)，根据PECS原则，此类型作为Producer只能生产数据。对于下面这个类：
 ```java
 interface Producer<T> {
-	T produce();
+    T produce();
 }
 ```
 这个类只有一个方法，它只能生产数据，并不能消耗数据，所以`Producer<String>`应该是`Producer<Object>`的子类，但Java编译器不知道，而且没有办法向Java编译器解释这种行为，所以Java禁止了它。
@@ -65,8 +65,8 @@ stringConsumer.consume("string consumer")
 `<T: Number>`。如果同一个类型参数需要一个以上的上限，则需要单独的`where`子句：
 ```kotlin
 fun <T> copyWhenGreater(list: List<T>, threshold: T): List<String>  
-        where T : CharSequence,  
-		      T : Comparable<T> {  
+        where T : CharSequence,
+              T : Comparable<T> {  
     return list.filter { it > threshold }.map { it.toString() }  
 }
 ```

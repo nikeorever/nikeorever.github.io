@@ -13,8 +13,8 @@ categories: post
 ```dart
 Iterable<int> genSnc() sync* {  
   for (var i = 0; i < 3; i++) {  
-    sleep(Duration(seconds: 1));  
-	yield i;  
+    sleep(Duration(seconds: 1));
+    yield i;  
   }  
 }
 ```
@@ -23,8 +23,8 @@ Iterable<int> genSnc() sync* {
 ```dart
 Stream<int> genAsync() async* {  
   for (var i = 0; i < 3; i++) {  
-    await Future.delayed(Duration(seconds: 1));  
-	yield i;  
+    await Future.delayed(Duration(seconds: 1));
+    yield i;  
   }  
 }
 ```
@@ -85,8 +85,7 @@ controller.add(10);
 和`Iterable`一样，`Stream`也需要一些中间操作来丰富自己-如`Stream`中*events*的`map`，`filter`等等。当然，这些都已经存在于`Stream`的核心API中，但是我们可能还需要类似 `timestamp`（包装原始*event*，使其增加时间辍）等等这些拓展API，这时候需要我们自己拓展`Stream`。我们借助`Stream`的`transform`函数来完成*Source Stream*向*Target Stream*的转化。这里以[rxdart](https://pub.dev/packages/rxdart)中的`timestamp`拓展函数来演示：
 首先我们定义自己的`StreamTransformer`：
 ```dart
-class TimestampStreamTransformer<S>  
-    extends StreamTransformerBase<S, Timestamped<S>> {  
+class TimestampStreamTransformer<S> extends StreamTransformerBase<S, Timestamped<S>> {  
  /// Constructs a [StreamTransformer] which emits events from the  
  /// source [Stream] as snapshots in the form of [Timestamped]. 
  TimestampStreamTransformer();  
