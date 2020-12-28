@@ -1,4 +1,5 @@
 deploy:
+	jekyll build
 	git checkout trunk
 	git add -A
 	git commit -m "Deploy blog"
