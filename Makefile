@@ -3,6 +3,7 @@ deploy:
 	git add -A
 	git commit -m "Deploy blog"
 	cp -r _site/ /tmp/
+	cp ./CNAME /tmp/_site/
 	git checkout gh-pages
 	rm -r ./*
 	cp -r /tmp/_site/* ./
