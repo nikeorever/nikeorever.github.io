@@ -248,29 +248,44 @@
 
 <ol>
   <li>post*: 队列发送一个包含<code class="language-plaintext highlighter-rouge">Runnable</code>的消息对象，当<code class="language-plaintext highlighter-rouge">Looper</code>调度到该条消息后，会执行该<code class="language-plaintext highlighter-rouge">Runnable</code>。</li>
-  <li>send*: 队列发送一个包含数据的消息对象，当<code class="language-plaintext highlighter-rouge">Looper</code>调度到该条消息后，会将该消息分发给目标<code class="language-plaintext highlighter-rouge">Handler</code>,交给<code class="language-plaintext highlighter-rouge">Handler</code>的<code class="language-plaintext highlighter-rouge">dispatchMessage()</code>去具体分发。
- ```java
- // Handler.java</li>
+  <li>send*: 队列发送一个包含数据的消息对象，当<code class="language-plaintext highlighter-rouge">Looper</code>调度到该条消息后，会将该消息分发给目标<code class="language-plaintext highlighter-rouge">Handler</code>,交给<code class="language-plaintext highlighter-rouge">Handler</code>的<code class="language-plaintext highlighter-rouge">dispatchMessage()</code>去具体分发。</li>
 </ol>
 
-<p>/**</p>
-<ul>
-  <li>Handle system messages here. 
- */
-public void dispatchMessage(@NonNull Message msg) {<br />
- if (msg.callback != null) {<br />
-     handleCallback(msg);<br />
- } else {<br />
-     if (mCallback != null) {<br />
-         if (mCallback.handleMessage(msg)) {<br />
-             return;<br />
-            }<br />
-     }<br />
-     handleMessage(msg);<br />
-}<br />
-}
- ```</li>
-</ul>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+</pre></td><td class="rouge-code"><pre> <span class="c1">// Handler.java</span>
+
+<span class="cm">/**  
+ * Handle system messages here. 
+ */</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">dispatchMessage</span><span class="o">(</span><span class="nd">@NonNull</span> <span class="nc">Message</span> <span class="n">msg</span><span class="o">)</span> <span class="o">{</span>  
+    <span class="k">if</span> <span class="o">(</span><span class="n">msg</span><span class="o">.</span><span class="na">callback</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>  
+        <span class="n">handleCallback</span><span class="o">(</span><span class="n">msg</span><span class="o">);</span>  
+	<span class="o">}</span> <span class="k">else</span> <span class="o">{</span>  
+        <span class="k">if</span> <span class="o">(</span><span class="n">mCallback</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>  
+            <span class="k">if</span> <span class="o">(</span><span class="n">mCallback</span><span class="o">.</span><span class="na">handleMessage</span><span class="o">(</span><span class="n">msg</span><span class="o">))</span> <span class="o">{</span>  
+                <span class="k">return</span><span class="o">;</span>  
+			   <span class="o">}</span>  
+        <span class="o">}</span>  
+        <span class="n">handleMessage</span><span class="o">(</span><span class="n">msg</span><span class="o">);</span>  
+   <span class="o">}</span>  
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
 
 <h4 id="内存泄漏">内存泄漏</h4>
 
