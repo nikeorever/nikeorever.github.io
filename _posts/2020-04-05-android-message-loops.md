@@ -148,6 +148,8 @@ MessageA(同步消息)->MessageE(异步消息)
 
  1. post*: 队列发送一个包含`Runnable`的消息对象，当`Looper`调度到该条消息后，会执行该`Runnable`。
  2. send*: 队列发送一个包含数据的消息对象，当`Looper`调度到该条消息后，会将该消息分发给目标`Handler`,交给`Handler`的`dispatchMessage()`去具体分发。
+
+
  ```java
  // Handler.java
 
