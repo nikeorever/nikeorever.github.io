@@ -2,7 +2,7 @@
 title: 'View的Measure,Layout,Draw流程'
 category: 'Android'
 layout: post
-0
+
 categories: post
 ---
 
@@ -217,7 +217,7 @@ categories: post
             doTraversal();
         }
     }
-    
+
     final TraversalRunnable mTraversalRunnable = new TraversalRunnable();
 
     void doTraversal() {
