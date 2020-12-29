@@ -8,7 +8,7 @@ categories: post
 
 > 这篇文章主要讨论一下Android中的View的Measure,Layout,Draw流程。
 
-### 问题
+#### 问题
 
 在讨论整个流程之前，首先抛出两个问题，这两个问题的答案我会在后续进行解答：
 
@@ -39,7 +39,7 @@ categories: post
     }
 ```
 
-### 总体流程
+#### 总体流程
 
 由于`Activity`是Ui展示的重要组件，所以我们从`Activity`生命周期的角度去讨论View的**Measure**,**Layout**,**Draw**流程。`ActivityThread`是个非常重要的类，它管理主线程的执行，调度，执行应用中的Activities,Broadcasts等组件，这个类中有几个和`Activity`密切相关的方法：
 
@@ -50,7 +50,7 @@ categories: post
 
 在**Resume**`Activity`后，开始执行View Tree的Measure, Layout, Draw流程，我们开始详细讨论这一部分。
 
-### ActivityThread#handleResumeActivity
+#### ActivityThread#handleResumeActivity
 
 这是**Resume Activity**的关键方法，我们摘取部分关键代码：
 
@@ -311,15 +311,15 @@ categories: post
 
 上面这个方法包含Measure, Layout, Draw整个过程。
 
-#### Measure
+##### Measure
 
 ViewRootImpl#measureHierarchy() => ViewRootImpl#performMeasure() => DecorView#measure() => DecorView#onMeasure()
 
-#### Layout
+##### Layout
 
 ViewRootImpl#performLayout() => DecorView#layout() => DecorView#onLayout()
 
-#### Draw
+##### Draw
 
 ViewRootImpl#performDraw() =>  ViewRootImpl#draw() => ViewRootImpl#drawSoftware() => DecorView#draw() => DecorView#onDraw()
 
