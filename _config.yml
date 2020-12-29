@@ -16,4 +16,4 @@ future: true
 
 exclude:
   - README.md
-  - CNAME
+  - Makefile
