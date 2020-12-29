@@ -27,7 +27,7 @@
   <p>这篇文章主要讨论一下Android中的View的Measure,Layout,Draw流程。</p>
 </blockquote>
 
-<h3 id="问题">问题</h3>
+<h4 id="问题">问题</h4>
 
 <p>在讨论整个流程之前，首先抛出两个问题，这两个问题的答案我会在后续进行解答：</p>
 
@@ -80,7 +80,7 @@
     <span class="p">}</span>
 </pre></td></tr></tbody></table></code></pre></div></div>
 
-<h3 id="总体流程">总体流程</h3>
+<h4 id="总体流程">总体流程</h4>
 
 <p>由于<code class="language-plaintext highlighter-rouge">Activity</code>是Ui展示的重要组件，所以我们从<code class="language-plaintext highlighter-rouge">Activity</code>生命周期的角度去讨论View的<strong>Measure</strong>,<strong>Layout</strong>,<strong>Draw</strong>流程。<code class="language-plaintext highlighter-rouge">ActivityThread</code>是个非常重要的类，它管理主线程的执行，调度，执行应用中的Activities,Broadcasts等组件，这个类中有几个和<code class="language-plaintext highlighter-rouge">Activity</code>密切相关的方法：</p>
 
@@ -93,7 +93,7 @@
 
 <p>在<strong>Resume</strong><code class="language-plaintext highlighter-rouge">Activity</code>后，开始执行View Tree的Measure, Layout, Draw流程，我们开始详细讨论这一部分。</p>
 
-<h3 id="activitythreadhandleresumeactivity">ActivityThread#handleResumeActivity</h3>
+<h4 id="activitythreadhandleresumeactivity">ActivityThread#handleResumeActivity</h4>
 
 <p>这是<strong>Resume Activity</strong>的关键方法，我们摘取部分关键代码：</p>
 
@@ -576,15 +576,15 @@
 
 <p>上面这个方法包含Measure, Layout, Draw整个过程。</p>
 
-<h4 id="measure">Measure</h4>
+<h5 id="measure">Measure</h5>
 
 <p>ViewRootImpl#measureHierarchy() =&gt; ViewRootImpl#performMeasure() =&gt; DecorView#measure() =&gt; DecorView#onMeasure()</p>
 
-<h4 id="layout">Layout</h4>
+<h5 id="layout">Layout</h5>
 
 <p>ViewRootImpl#performLayout() =&gt; DecorView#layout() =&gt; DecorView#onLayout()</p>
 
-<h4 id="draw">Draw</h4>
+<h5 id="draw">Draw</h5>
 
 <p>ViewRootImpl#performDraw() =&gt;  ViewRootImpl#draw() =&gt; ViewRootImpl#drawSoftware() =&gt; DecorView#draw() =&gt; DecorView#onDraw()</p>
 
