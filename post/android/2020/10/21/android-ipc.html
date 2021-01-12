@@ -31,8 +31,238 @@
 
 <h4 id="aidl">AIDL</h4>
 
-<h5 id="语法规范">语法规范</h5>
+<ul>
+  <li>支持AIDL文件中所有的代码注释（除了 <code class="language-plaintext highlighter-rouge">import</code> 或 <code class="language-plaintext highlighter-rouge">package</code> 语句之前的注释）</li>
+</ul>
 
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+</pre></td><td class="rouge-code"><pre> // AIDLService.aidl
+package cn.nikeo.app;
+
+// The comment before import statement.
+import java.lang.String;
+/**
+ *  The comment before AIDLService.
+ */
+interface AIDLService {
+    /**
+     * Demonstrates some basic types that you can use as parameters
+     * and return values in AIDL.
+     */
+    void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat,
+            double aDouble, String aString);
+
+    /**
+     * The comment before constants.
+     */
+    const int TYPE = 10;
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>Generated</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+</pre></td><td class="rouge-code"><pre><span class="cm">/*
+ * This file is auto-generated.  DO NOT MODIFY.
+ */</span>
+<span class="kn">package</span> <span class="nn">cn.nikeo.app</span><span class="o">;</span>
+<span class="cm">/**
+ *  The comment before AIDLService.
+ */</span>
+<span class="kd">public</span> <span class="kd">interface</span> <span class="nc">AIDLService</span> <span class="kd">extends</span> <span class="n">android</span><span class="o">.</span><span class="na">os</span><span class="o">.</span><span class="na">IInterface</span>
+<span class="o">{</span>
+  
+  <span class="o">...</span>
+
+  <span class="cm">/**
+       * The comment before constants.
+       */</span>
+  <span class="kd">public</span> <span class="kd">static</span> <span class="kd">final</span> <span class="kt">int</span> <span class="no">TYPE</span> <span class="o">=</span> <span class="mi">10</span><span class="o">;</span>
+  <span class="cm">/**
+       * Demonstrates some basic types that you can use as parameters
+       * and return values in AIDL.
+       */</span>
+  <span class="kd">public</span> <span class="kt">void</span> <span class="nf">basicTypes</span><span class="o">(</span><span class="kt">int</span> <span class="n">anInt</span><span class="o">,</span> <span class="kt">long</span> <span class="n">aLong</span><span class="o">,</span> <span class="kt">boolean</span> <span class="n">aBoolean</span><span class="o">,</span> <span class="kt">float</span> <span class="n">aFloat</span><span class="o">,</span> <span class="kt">double</span> <span class="n">aDouble</span><span class="o">,</span> <span class="n">java</span><span class="o">.</span><span class="na">lang</span><span class="o">.</span><span class="na">String</span> <span class="n">aString</span><span class="o">)</span> <span class="kd">throws</span> <span class="n">android</span><span class="o">.</span><span class="na">os</span><span class="o">.</span><span class="na">RemoteException</span><span class="o">;</span>
+<span class="o">}</span>
+
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<ul>
+  <li>对于一些自定义的AIDL-generated接口类型或自定义的parcelable类型，如果要在其他AIDL文件中引用它，即使是同包下，也需要主动 <code class="language-plaintext highlighter-rouge">import</code> 该类型。</li>
+</ul>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td><td class="rouge-code"><pre>// Runnable.aidl
+package cn.nikeo.app;
+
+interface Runnable {
+    void run();
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre></td><td class="rouge-code"><pre>// Rect.aidl
+package cn.nikeo.app;
+
+parcelable Rect {
+    int left;
+    int top;
+    int right;
+    int bottom;
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre></td><td class="rouge-code"><pre>// AIDLService.aidl
+package cn.nikeo.app;
+
+import cn.nikeo.app.Runnable;
+import cn.nikeo.app.Rect;
+
+interface AIDLService {
+    void stringType(String str);
+    void runnableType(Runnable runnable);
+    void rectType(inout Rect rect);
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h5 id="支持的数据类型">支持的数据类型</h5>
+
+<ul>
+  <li>
+    <p>除 <code class="language-plaintext highlighter-rouge">short</code> 之外的所有基本数据类型（<code class="language-plaintext highlighter-rouge">boolean</code>, <code class="language-plaintext highlighter-rouge">char</code>, <code class="language-plaintext highlighter-rouge">byte</code>, <code class="language-plaintext highlighter-rouge">int</code>, <code class="language-plaintext highlighter-rouge">long</code>, <code class="language-plaintext highlighter-rouge">float</code>, <code class="language-plaintext highlighter-rouge">double</code>）。</p>
+
+    <p>方向标记：必须是 <code class="language-plaintext highlighter-rouge">in</code>，可以省略。</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">java.lang.String</code>。</p>
+
+    <p>方向标记：必须是 <code class="language-plaintext highlighter-rouge">in</code>，可以省略。</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">java.lang.CharSequence</code>。</p>
+
+    <p>方向标记：必须是 <code class="language-plaintext highlighter-rouge">in</code>，可以省略。</p>
+  </li>
+  <li>
+    <p>AIDL-generated interfaces。</p>
+
+    <p>方向标记：必须是 <code class="language-plaintext highlighter-rouge">in</code>，可以省略。</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">android.os.IBinder</code>。</p>
+
+    <p>方向标记：必须是 <code class="language-plaintext highlighter-rouge">in</code>，可以省略。</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">android.os.Parcelable</code>的实现类（如 <code class="language-plaintext highlighter-rouge">android.os.Bundle</code>）。</p>
+
+    <p>方向标记：必须是 <code class="language-plaintext highlighter-rouge">in</code>, <code class="language-plaintext highlighter-rouge">out</code> 或 <code class="language-plaintext highlighter-rouge">inout</code>，不可以省略。</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">java.util.List</code>。支持指定泛型参数类型（如<code class="language-plaintext highlighter-rouge">List&lt;String&gt;</code>），接收端实际接受到的具体类型是 <code class="language-plaintext highlighter-rouge">java.util.ArrayList</code>。</p>
+
+    <p>方向标记：必须是 <code class="language-plaintext highlighter-rouge">in</code>, <code class="language-plaintext highlighter-rouge">out</code> 或 <code class="language-plaintext highlighter-rouge">inout</code>，不可以省略。</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">java.util.Map</code>。不支持指定泛型参数类型（如<code class="language-plaintext highlighter-rouge">Map&lt;String, String&gt;</code>），接收端实际接受到的具体类型是 <code class="language-plaintext highlighter-rouge">java.util.HashMap</code>,推荐使用 <code class="language-plaintext highlighter-rouge">android.os.Bundle</code>。</p>
+
+    <p>方向标记：必须是 <code class="language-plaintext highlighter-rouge">in</code>, <code class="language-plaintext highlighter-rouge">out</code> 或 <code class="language-plaintext highlighter-rouge">inout</code>，不可以省略。</p>
+  </li>
+  <li>
+    <p>数组类型（如 <code class="language-plaintext highlighter-rouge">int[]</code>, <code class="language-plaintext highlighter-rouge">String[]</code>）。</p>
+
+    <p>方向标记：必须是 <code class="language-plaintext highlighter-rouge">in</code>, <code class="language-plaintext highlighter-rouge">out</code> 或 <code class="language-plaintext highlighter-rouge">inout</code>，不可以省略。</p>
+  </li>
+</ul>
+
+<h5 id="aidl-接口方法">AIDL 接口方法</h5>
+
+<ul>
+  <li>方法可以携带0个或多个方法参数，返回 <code class="language-plaintext highlighter-rouge">void</code> 或一个值。</li>
+  <li>可以定义 <code class="language-plaintext highlighter-rouge">java.lang.String</code> 或 <code class="language-plaintext highlighter-rouge">int</code> 类型的常量。</li>
+</ul>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>    const int VERSION = 1;
+    const String TAG = "TAG";
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<ul>
+  <li>Nullable的参数或返回值可以注解 <code class="language-plaintext highlighter-rouge">@nullable</code>。</li>
+</ul>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>    @nullable
+    String nullableType(@nullable String name);
+</pre></td></tr></tbody></table></code></pre></div></div>
 
 
     <p class="signature">&mdash; Lenox&nbsp;Xian</p>

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Volatile - Lenox&nbsp;Xian</title>
+  <link rel="stylesheet" href="/static/bootstrap.min.css" type="text/css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans SC:300,400,700" type="text/css">
+  <link rel="stylesheet" href="/static/app.css" type="text/css">
+  <link rel="stylesheet" href="/static/syntax.css" type="text/css">
+</head>
+
+<body>
+  <header>
+    <h1>Lenox&nbsp;Xian</h1>
+    <p>Everything negative-pressure，challenges-is all an opportunity for me to rise</p>
+  </header>
+
+  <div class="content post">
+    <h2>Volatile</h2>
+    <p class="date">26 April 2020</p>
+
+    <blockquote>
+  <p>这篇文章聊一下Java中的Volatile。</p>
+</blockquote>
+
+<h3 id="前言">前言</h3>
+
+<p>在讨论Volatile之前，我们先看以下代码。我们定义了一个 <code class="language-plaintext highlighter-rouge">Boolean</code> 类型的变量-<code class="language-plaintext highlighter-rouge">flag</code>，线程（Thread-flagSetter）负责等待线程（Thread-flagGetter）运行后设置 <code class="language-plaintext highlighter-rouge">flag</code> 为 <code class="language-plaintext highlighter-rouge">true</code>，线程（Thread-flagGetter）循环读取 <code class="language-plaintext highlighter-rouge">flag</code> 的值，如果发现 <code class="language-plaintext highlighter-rouge">flag</code> 被更改为 <code class="language-plaintext highlighter-rouge">true</code>，则退出循环，此线程运行结束。由于JVM会等待所有的非守护线程运行结束后结束进程，所以按照预期，此时 <em>Thread-flagGetter</em>/<em>Thread-flagSetter</em>/<em>Thread-main</em>三个线程运行结束，JVM结束运行。</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+</pre></td><td class="rouge-code"><pre><span class="k">private</span> <span class="kd">var</span> <span class="py">flag</span> <span class="p">=</span> <span class="k">false</span>
+
+<span class="k">fun</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="nf">thread</span><span class="p">(</span><span class="n">name</span> <span class="p">=</span> <span class="s">"Thread-flagGetter"</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nf">println</span><span class="p">(</span><span class="s">"${Thread.currentThread().name} is running until flag is set to true."</span><span class="p">)</span>
+        <span class="kd">var</span> <span class="py">count</span> <span class="p">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="p">(!</span><span class="n">flag</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">count</span><span class="p">++</span>
+        <span class="p">}</span>
+        <span class="nf">println</span><span class="p">(</span><span class="s">"${Thread.currentThread().name} is ready to terminate. the count of loop is $count"</span><span class="p">)</span>
+    <span class="p">}</span>
+
+    <span class="nf">thread</span><span class="p">(</span><span class="n">name</span> <span class="p">=</span> <span class="s">"Thread-flagSetter"</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nc">Thread</span><span class="p">.</span><span class="nf">sleep</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span> <span class="c1">// wait for Thread-flagGetter to run first.</span>
+        <span class="nf">println</span><span class="p">(</span><span class="s">"${Thread.currentThread().name} is ready to set flag to true."</span><span class="p">)</span>
+        <span class="n">flag</span> <span class="p">=</span> <span class="k">true</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>但是真的会按照我们设想的预期执行吗，我们运行以上代码，控制台如下打印：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>Thread-flagGetter is running until flag is set to true.
+Thread-flagSetter is ready to set flag to true.
+</pre></td></tr></tbody></table></code></pre></div></div>
+<p>我们发现线程（Thread-flagSetter）已经将 <code class="language-plaintext highlighter-rouge">flag</code> 设置为 <code class="language-plaintext highlighter-rouge">true</code>，线程（Thread-flagGetter）也一直在运行并循环获取 <code class="language-plaintext highlighter-rouge">flag</code>的值，但这个值一直是先前的值 - <code class="language-plaintext highlighter-rouge">false</code>，JVM进程因此一直保持活动状态。</p>
+
+<h5 id="解决方案一">解决方案一：</h5>
+
+<p>向 <code class="language-plaintext highlighter-rouge">flag</code> 变量添加 <code class="language-plaintext highlighter-rouge">@Volatile</code> 注解，这是Kotlin语法，其作用和Java中添加 <code class="language-plaintext highlighter-rouge">volatile</code> 关键字一样。</p>
+<div class="language-diff highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td><td class="rouge-code"><pre><span class="gi">+@Volatile 
+</span> private var flag = false
+
+ ...
+
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre></td><td class="rouge-code"><pre><span class="c1">// JvmFlagAnnotations.kt</span>
+
+<span class="cm">/**
+ * Marks the JVM backing field of the annotated property as `volatile`, meaning that writes to this field
+ * are immediately made visible to other threads.
+ */</span>
+<span class="nd">@Target</span><span class="p">(</span><span class="nc">FIELD</span><span class="p">)</span>
+<span class="nd">@Retention</span><span class="p">(</span><span class="nc">AnnotationRetention</span><span class="p">.</span><span class="nc">SOURCE</span><span class="p">)</span>
+<span class="nd">@MustBeDocumented</span>
+<span class="k">public</span> <span class="n">actual</span> <span class="k">annotation</span> <span class="kd">class</span> <span class="nc">Volatile</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>修改完后，继续运行代码，控制台如下打印：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td><td class="rouge-code"><pre>Thread-flagGetter is running until flag is set to true.
+Thread-flagSetter is ready to set flag to true.
+Thread-flagGetter is ready to terminate. the count of loop is -27740848
+
+Process finished with exit code 0
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h5 id="解决方案二">解决方案二：</h5>
+
+<p>修改 <code class="language-plaintext highlighter-rouge">flag</code> 变量的类型为 <code class="language-plaintext highlighter-rouge">java.util.concurrent.atomic.AtomicBoolean</code>，使用该类型的成员方法去 get/set：</p>
+
+<div class="language-diff highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+</pre></td><td class="rouge-code"><pre><span class="gd">-private var flag = false
+</span><span class="gi">+private val flag = AtomicBoolean(false)
+</span>
+fun main() {
+    thread(name = "Thread-flagGetter") {
+        println("${Thread.currentThread().name} is running until flag is set to true.")
+        var count = 0
+<span class="gd">-       while (!flag)
+</span><span class="gi">+       while (!flag.get()) {
+</span>            count++
+        }
+        println("${Thread.currentThread().name} is ready to terminate. the count of loop is $count")
+    }
+
+    thread(name = "Thread-flagSetter") {
+        Thread.sleep(1000) // wait for Thread-flagGetter to run first.
+        println("${Thread.currentThread().name} is ready to set flag to true.")
+<span class="gd">-       flag = true
+</span><span class="gi">+       flag.compareAndSet(false, true)
+</span>    }
+<span class="err">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>修改完后，继续运行代码，控制台如下打印：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td><td class="rouge-code"><pre>Thread-flagGetter is running until flag is set to true.
+Thread-flagSetter is ready to set flag to true.
+Thread-flagGetter is ready to terminate. the count of loop is 213872250
+
+Process finished with exit code 0
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h3 id="正文">正文</h3>
+
+<p>由于现代计算机是多处理器架构，所以每个线程可能运行在不同的处理器上，当在某个线程中处理数据的时候，该线程也许会将数据从 <strong>RAM</strong>（Main Memory） 拷贝（Copy）到执行它的CPU的缓存（Cache）上，所以线程可能直接对CPU的缓存（Cache）进行读写而不是 <strong>RAM</strong>（Main Memory）。上面例子中，线程（Thread-flagSetter）和 线程（Thread-flagGetter）将 <code class="language-plaintext highlighter-rouge">flag</code> 变量从 <strong>RAM</strong>（Main Memory） 拷贝（Copy）到各自执行它的CPU的缓存（Cache）上，使其成为副本，当线程（Thread-flagSetter）更新 <code class="language-plaintext highlighter-rouge">flag</code> 变量的值时，实际会先更新到缓存（Cache），此时尚未立刻同步到 <strong>RAM</strong>（Main Memory） 上，当线程（Thread-flagGetter）读取 <code class="language-plaintext highlighter-rouge">flag</code> 变量的值时，实际也是先读取的是缓存（Cache）上的值，虽然 <strong>RAM</strong>（Main Memory） 上的 <code class="language-plaintext highlighter-rouge">flag</code> 变量的值已经改变，但是尚未同步，所以线程（Thread-flagGetter）读取的还是未同步的旧值，这也是上个例子中问题的原因。</p>
+
+<p>由于该变量尚未被另一个线程写回 <strong>RAM</strong>（Main Memory） 而导致线程尚未看到变量的最新值而导致的问题称为 <strong>可见性（visibility）</strong> 问题。一个线程的更新对其他线程不可见。</p>
+
+<p>处理器负责执行程序指令，通常他们需要从 <strong>RAM</strong>（Main Memory） 获取程序指令以及需要的相关数据，由于处理器可以每秒处理大量的指令，所以直接从 <strong>RAM</strong>（Main Memory） 获取并不是一个高效的选择，因此为了处理的更快些，将这些相关指令和数据存入缓存（Cache）中，只有当高速缓存（Cache）和 <strong>RAM</strong>（Main Memory） 之间发生 <strong>同步</strong> 时，对数据的更改才会写会到 <strong>RAM</strong>（Main Memory） 中，但是 <strong>同步</strong> 的时机无法把控，这也意味这对缓存数据的更改 <strong>并不会立即</strong> 同步到 <strong>RAM</strong>（Main Memory） 中，所以，<strong>缓存一致性（cache coherence）</strong> 是必须考虑的，否则就会出现以上例子中出现的问题。</p>
+
+<h5 id="volatile易变性">Volatile（易变性）</h5>
+
+<p>Java中的 <code class="language-plaintext highlighter-rouge">volatile</code> 关键字和Kotlin中的 <code class="language-plaintext highlighter-rouge">@Volatile</code> 注解就是用来解决变量可见性这个问题的。正如解决方案一，将 <code class="language-plaintext highlighter-rouge">flag</code> 变量声明成 <code class="language-plaintext highlighter-rouge">volatile</code> 后，所有对该 <code class="language-plaintext highlighter-rouge">flag</code> 变量值的更新会 <strong>立刻</strong> 写会回到 <strong>RAM</strong>（Main Memory）上，并且所有对该 <code class="language-plaintext highlighter-rouge">flag</code> 变量值的读取会直接从 <strong>RAM</strong>（Main Memory）上读取，这样就保证了该变量对其他线程可见（variable）。</p>
+
+
+    <p class="signature">&mdash; Lenox&nbsp;Xian</p>
+  </div>
+  </script>
+</body>
+
+</html>
