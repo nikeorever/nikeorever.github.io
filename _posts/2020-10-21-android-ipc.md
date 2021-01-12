@@ -159,3 +159,347 @@ interface AIDLService {
     @nullable
     String nullableType(@nullable String name);
  ```
+
+##### C/S相互通信
+
+###### AIDL协议文件
+
+```
+// Messenger.aidl
+package cn.nikeo.app;
+
+interface Messenger {
+    void message(int what, inout @nullable Bundle data);
+}
+```
+
+```
+// Rect.aidl
+package cn.nikeo.app;
+
+parcelable Rect {
+    int left;
+    int top;
+    int right;
+    int bottom;
+}
+```
+
+```
+// Service.aidl
+package cn.nikeo.app;
+
+import cn.nikeo.app.Messenger;
+import cn.nikeo.app.Rect;
+
+interface Service {
+    void replyTo(Messenger clientMessenger);
+
+    void saveRect(in Rect rect);
+}
+```
+
+###### Client
+
+ ``` kotlin
+package cn.nikeo.app
+
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
+import android.os.Bundle
+import android.os.IBinder
+import androidx.appcompat.app.AppCompatActivity
+import cn.nikeo.app.databinding.ActivityClientBinding
+import kotlin.concurrent.thread
+
+class Client : AppCompatActivity() {
+
+    private var service: Service? = null
+
+    private val incomingMessageFromServer = object : Messenger.Stub() {
+        override fun message(what: Int, data: Bundle?) {
+            ipcLog("Client", "Receive a message( what: $what ) from the server.")
+        }
+    }
+
+    private val conn: ServiceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+            service = Service.Stub.asInterface(binder).apply {
+                replyTo(incomingMessageFromServer)
+            }
+            bound = true
+        }
+
+        override fun onServiceDisconnected(name: ComponentName) {
+            service = null
+            bound = false
+        }
+    }
+
+    private var bound = false
+
+    private lateinit var binding: ActivityClientBinding
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityClientBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        binding.saveRect.setOnClickListener {
+            for (i in 0..10) {
+                thread {
+                    val rect = Rect().apply {
+                        left = i
+                        top = i
+                        right = 100
+                        bottom = 100
+                    }
+                    ipcLog("Client", "Send a message( saveRect( Rect(left: ${rect.left}, top: ${rect.top}, right: ${rect.right}, bottom: ${rect.bottom}) ) ) from the client.")
+                    service?.saveRect(rect)
+                }
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        bindService(
+            Intent(this, Server::class.java),
+            conn,
+            Context.BIND_AUTO_CREATE
+        )
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (bound) {
+            unbindService(conn)
+            bound = false
+        }
+    }
+}
+ ```
+
+###### Server
+
+注意到在 `saveRect` 的方法中在写入SharedPreferences的时候添加了并发锁，防止多线程相关问题。
+
+ ```kotlin
+package cn.nikeo.app
+
+import android.app.Service
+import android.content.Intent
+import android.os.IBinder
+import androidx.core.content.edit
+import java.util.concurrent.locks.ReentrantLock
+
+class Server : Service() {
+
+    override fun onBind(intent: Intent): IBinder {
+        return binder
+    }
+
+    private val binder = object : cn.nikeo.app.Service.Stub() {
+        private var clientMessenger: Messenger? = null
+        override fun replyTo(clientMessenger: Messenger) {
+            this.clientMessenger = clientMessenger
+        }
+
+        private val lock = ReentrantLock()
+
+        override fun saveRect(rect: Rect) {
+            lock.lock()
+            ipcLog(
+                "Server",
+                "Receive a message( Rect(left: ${rect.left}, top: ${rect.top}, right: ${rect.right}, bottom: ${rect.bottom}) ) from the client. the number of threads in a blocked state: ${lock.queueLength}"
+            )
+            try {
+                getSharedPreferences("Rect", MODE_PRIVATE).edit {
+                    putInt("Left", rect.left)
+                    putInt("Top", rect.top)
+                    putInt("Right", rect.right)
+                    putInt("Bottom", rect.bottom)
+                }
+                clientMessenger?.message(1, null)
+            } finally {
+                lock.unlock()
+            }
+        }
+    }
+}
+ ```
+
+###### AndroidManifest配置
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="cn.nikeo.app">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.App">
+        <service
+            android:name=".Server"
+            android:enabled="true"
+            android:exported="false"
+            android:process=":server" />
+        <activity android:name=".Client">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
+```
+
+当我们在Client多线程发送11次 `saveRect` 命令的时候，监测Client端(cn.nikeo.app(7997))进程，打印如下：
+
+```
+2021-01-12 22:32:31.461 7997-8049/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-6,5,main]
+                
+                Send a message( saveRect( Rect(left: 4, top: 4, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.461 7997-8055/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-12,5,main]
+                
+                Send a message( saveRect( Rect(left: 10, top: 10, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.461 7997-8046/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-3,5,main]
+                
+                Send a message( saveRect( Rect(left: 1, top: 1, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.462 7997-8048/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-5,5,main]
+                
+                Send a message( saveRect( Rect(left: 3, top: 3, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.462 7997-8054/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-11,5,main]
+                
+                Send a message( saveRect( Rect(left: 9, top: 9, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.462 7997-8045/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-2,5,main]
+                
+                Send a message( saveRect( Rect(left: 0, top: 0, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.462 7997-8052/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-9,5,main]
+                
+                Send a message( saveRect( Rect(left: 7, top: 7, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.463 7997-8047/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-4,5,main]
+                
+                Send a message( saveRect( Rect(left: 2, top: 2, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.463 7997-8053/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-10,5,main]
+                
+                Send a message( saveRect( Rect(left: 8, top: 8, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.463 7997-8051/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-8,5,main]
+                
+                Send a message( saveRect( Rect(left: 6, top: 6, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.463 7997-8050/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-7,5,main]
+                
+                Send a message( saveRect( Rect(left: 5, top: 5, right: 100, bottom: 100) ) ) from the client.
+```
+
+监测Server端(cn.nikeo.app:server(8022))进程，打印如下：
+
+```
+2021-01-12 22:32:32.284 8022-8042/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_1,5,main]
+                
+                Receive a message( Rect(left: 10, top: 10, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 0
+2021-01-12 22:32:32.401 8022-8057/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_3,5,main]
+                
+                Receive a message( Rect(left: 1, top: 1, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 9
+2021-01-12 22:32:32.485 8022-8058/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_4,5,main]
+                
+                Receive a message( Rect(left: 3, top: 3, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 8
+2021-01-12 22:32:32.654 8022-8059/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_5,5,main]
+                
+                Receive a message( Rect(left: 9, top: 9, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 7
+2021-01-12 22:32:32.657 8022-8060/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_6,5,main]
+                
+                Receive a message( Rect(left: 0, top: 0, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 6
+2021-01-12 22:32:32.660 8022-8061/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_7,5,main]
+                
+                Receive a message( Rect(left: 7, top: 7, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 5
+2021-01-12 22:32:32.662 8022-8062/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_8,5,main]
+                
+                Receive a message( Rect(left: 2, top: 2, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 4
+2021-01-12 22:32:32.664 8022-8063/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_9,5,main]
+                
+                Receive a message( Rect(left: 8, top: 8, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 3
+2021-01-12 22:32:32.666 8022-8064/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_A,5,main]
+                
+                Receive a message( Rect(left: 6, top: 6, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 2
+2021-01-12 22:32:32.668 8022-8065/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_B,5,main]
+                
+                Receive a message( Rect(left: 5, top: 5, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 1
+2021-01-12 22:32:32.670 8022-8043/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_2,5,main]
+                
+                Receive a message( Rect(left: 4, top: 4, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 0
+```
