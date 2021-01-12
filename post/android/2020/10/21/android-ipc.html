@@ -264,6 +264,646 @@ interface AIDLService {
     String nullableType(@nullable String name);
 </pre></td></tr></tbody></table></code></pre></div></div>
 
+<h5 id="cs相互通信">C/S相互通信</h5>
+
+<h6 id="aidl协议文件">AIDL协议文件</h6>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td><td class="rouge-code"><pre>// Messenger.aidl
+package cn.nikeo.app;
+
+interface Messenger {
+    void message(int what, inout @nullable Bundle data);
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre></td><td class="rouge-code"><pre>// Rect.aidl
+package cn.nikeo.app;
+
+parcelable Rect {
+    int left;
+    int top;
+    int right;
+    int bottom;
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre></td><td class="rouge-code"><pre>// Service.aidl
+package cn.nikeo.app;
+
+import cn.nikeo.app.Messenger;
+import cn.nikeo.app.Rect;
+
+interface Service {
+    void replyTo(Messenger clientMessenger);
+
+    void saveRect(in Rect rect);
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h6 id="client">Client</h6>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+</pre></td><td class="rouge-code"><pre><span class="k">package</span> <span class="nn">cn.nikeo.app</span>
+
+<span class="k">import</span> <span class="nn">android.content.ComponentName</span>
+<span class="k">import</span> <span class="nn">android.content.Context</span>
+<span class="k">import</span> <span class="nn">android.content.Intent</span>
+<span class="k">import</span> <span class="nn">android.content.ServiceConnection</span>
+<span class="k">import</span> <span class="nn">android.os.Bundle</span>
+<span class="k">import</span> <span class="nn">android.os.IBinder</span>
+<span class="k">import</span> <span class="nn">androidx.appcompat.app.AppCompatActivity</span>
+<span class="k">import</span> <span class="nn">cn.nikeo.app.databinding.ActivityClientBinding</span>
+<span class="k">import</span> <span class="nn">kotlin.concurrent.thread</span>
+
+<span class="kd">class</span> <span class="nc">Client</span> <span class="p">:</span> <span class="nc">AppCompatActivity</span><span class="p">()</span> <span class="p">{</span>
+
+    <span class="k">private</span> <span class="kd">var</span> <span class="py">service</span><span class="p">:</span> <span class="nc">Service</span><span class="p">?</span> <span class="p">=</span> <span class="k">null</span>
+
+    <span class="k">private</span> <span class="kd">val</span> <span class="py">incomingMessageFromServer</span> <span class="p">=</span> <span class="kd">object</span> <span class="err">: </span><span class="nc">Messenger</span><span class="p">.</span><span class="nc">Stub</span><span class="p">()</span> <span class="p">{</span>
+        <span class="k">override</span> <span class="k">fun</span> <span class="nf">message</span><span class="p">(</span><span class="n">what</span><span class="p">:</span> <span class="nc">Int</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nc">Bundle</span><span class="p">?)</span> <span class="p">{</span>
+            <span class="nf">ipcLog</span><span class="p">(</span><span class="s">"Client"</span><span class="p">,</span> <span class="s">"Receive a message( what: $what ) from the server."</span><span class="p">)</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="k">private</span> <span class="kd">val</span> <span class="py">conn</span><span class="p">:</span> <span class="nc">ServiceConnection</span> <span class="p">=</span> <span class="kd">object</span> <span class="err">: </span><span class="nc">ServiceConnection</span> <span class="p">{</span>
+        <span class="k">override</span> <span class="k">fun</span> <span class="nf">onServiceConnected</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nc">ComponentName</span><span class="p">,</span> <span class="n">binder</span><span class="p">:</span> <span class="nc">IBinder</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">service</span> <span class="p">=</span> <span class="nc">Service</span><span class="p">.</span><span class="nc">Stub</span><span class="p">.</span><span class="nf">asInterface</span><span class="p">(</span><span class="n">binder</span><span class="p">).</span><span class="nf">apply</span> <span class="p">{</span>
+                <span class="nf">replyTo</span><span class="p">(</span><span class="n">incomingMessageFromServer</span><span class="p">)</span>
+            <span class="p">}</span>
+            <span class="n">bound</span> <span class="p">=</span> <span class="k">true</span>
+        <span class="p">}</span>
+
+        <span class="k">override</span> <span class="k">fun</span> <span class="nf">onServiceDisconnected</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nc">ComponentName</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">service</span> <span class="p">=</span> <span class="k">null</span>
+            <span class="n">bound</span> <span class="p">=</span> <span class="k">false</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="k">private</span> <span class="kd">var</span> <span class="py">bound</span> <span class="p">=</span> <span class="k">false</span>
+
+    <span class="k">private</span> <span class="k">lateinit</span> <span class="kd">var</span> <span class="py">binding</span><span class="p">:</span> <span class="nc">ActivityClientBinding</span>
+
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">onCreate</span><span class="p">(</span><span class="n">savedInstanceState</span><span class="p">:</span> <span class="nc">Bundle</span><span class="p">?)</span> <span class="p">{</span>
+        <span class="k">super</span><span class="p">.</span><span class="nf">onCreate</span><span class="p">(</span><span class="n">savedInstanceState</span><span class="p">)</span>
+        <span class="n">binding</span> <span class="p">=</span> <span class="nc">ActivityClientBinding</span><span class="p">.</span><span class="nf">inflate</span><span class="p">(</span><span class="n">layoutInflater</span><span class="p">)</span>
+        <span class="nf">setContentView</span><span class="p">(</span><span class="n">binding</span><span class="p">.</span><span class="n">root</span><span class="p">)</span>
+
+        <span class="n">binding</span><span class="p">.</span><span class="n">saveRect</span><span class="p">.</span><span class="nf">setOnClickListener</span> <span class="p">{</span>
+            <span class="k">for</span> <span class="p">(</span><span class="n">i</span> <span class="k">in</span> <span class="mi">0</span><span class="o">..</span><span class="mi">10</span><span class="p">)</span> <span class="p">{</span>
+                <span class="nf">thread</span> <span class="p">{</span>
+                    <span class="kd">val</span> <span class="py">rect</span> <span class="p">=</span> <span class="nc">Rect</span><span class="p">().</span><span class="nf">apply</span> <span class="p">{</span>
+                        <span class="n">left</span> <span class="p">=</span> <span class="n">i</span>
+                        <span class="n">top</span> <span class="p">=</span> <span class="n">i</span>
+                        <span class="n">right</span> <span class="p">=</span> <span class="mi">100</span>
+                        <span class="n">bottom</span> <span class="p">=</span> <span class="mi">100</span>
+                    <span class="p">}</span>
+                    <span class="nf">ipcLog</span><span class="p">(</span><span class="s">"Client"</span><span class="p">,</span> <span class="s">"Send a message( saveRect( Rect(left: ${rect.left}, top: ${rect.top}, right: ${rect.right}, bottom: ${rect.bottom}) ) ) from the client."</span><span class="p">)</span>
+                    <span class="n">service</span><span class="o">?.</span><span class="nf">saveRect</span><span class="p">(</span><span class="n">rect</span><span class="p">)</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">onStart</span><span class="p">()</span> <span class="p">{</span>
+        <span class="k">super</span><span class="p">.</span><span class="nf">onStart</span><span class="p">()</span>
+        <span class="nf">bindService</span><span class="p">(</span>
+            <span class="nc">Intent</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="nc">Server</span><span class="o">::</span><span class="k">class</span><span class="p">.</span><span class="n">java</span><span class="p">),</span>
+            <span class="n">conn</span><span class="p">,</span>
+            <span class="nc">Context</span><span class="p">.</span><span class="nc">BIND_AUTO_CREATE</span>
+        <span class="p">)</span>
+    <span class="p">}</span>
+
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">onStop</span><span class="p">()</span> <span class="p">{</span>
+        <span class="k">super</span><span class="p">.</span><span class="nf">onStop</span><span class="p">()</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">bound</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nf">unbindService</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span>
+            <span class="n">bound</span> <span class="p">=</span> <span class="k">false</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h6 id="server">Server</h6>
+
+<p>注意到在 <code class="language-plaintext highlighter-rouge">saveRect</code> 的方法中在写入SharedPreferences的时候添加了并发锁，防止多线程相关问题。</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+</pre></td><td class="rouge-code"><pre><span class="k">package</span> <span class="nn">cn.nikeo.app</span>
+
+<span class="k">import</span> <span class="nn">android.app.Service</span>
+<span class="k">import</span> <span class="nn">android.content.Intent</span>
+<span class="k">import</span> <span class="nn">android.os.IBinder</span>
+<span class="k">import</span> <span class="nn">androidx.core.content.edit</span>
+<span class="k">import</span> <span class="nn">java.util.concurrent.locks.ReentrantLock</span>
+
+<span class="kd">class</span> <span class="nc">Server</span> <span class="p">:</span> <span class="nc">Service</span><span class="p">()</span> <span class="p">{</span>
+
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">onBind</span><span class="p">(</span><span class="n">intent</span><span class="p">:</span> <span class="nc">Intent</span><span class="p">):</span> <span class="nc">IBinder</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">binder</span>
+    <span class="p">}</span>
+
+    <span class="k">private</span> <span class="kd">val</span> <span class="py">binder</span> <span class="p">=</span> <span class="kd">object</span> <span class="err">: cn.nikeo.app.</span><span class="nc">Service</span><span class="p">.</span><span class="nc">Stub</span><span class="p">()</span> <span class="p">{</span>
+        <span class="k">private</span> <span class="kd">var</span> <span class="py">clientMessenger</span><span class="p">:</span> <span class="nc">Messenger</span><span class="p">?</span> <span class="p">=</span> <span class="k">null</span>
+        <span class="k">override</span> <span class="k">fun</span> <span class="nf">replyTo</span><span class="p">(</span><span class="n">clientMessenger</span><span class="p">:</span> <span class="nc">Messenger</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">this</span><span class="p">.</span><span class="n">clientMessenger</span> <span class="p">=</span> <span class="n">clientMessenger</span>
+        <span class="p">}</span>
+
+        <span class="k">private</span> <span class="kd">val</span> <span class="py">lock</span> <span class="p">=</span> <span class="nc">ReentrantLock</span><span class="p">()</span>
+
+        <span class="k">override</span> <span class="k">fun</span> <span class="nf">saveRect</span><span class="p">(</span><span class="n">rect</span><span class="p">:</span> <span class="nc">Rect</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">lock</span><span class="p">.</span><span class="nf">lock</span><span class="p">()</span>
+            <span class="nf">ipcLog</span><span class="p">(</span>
+                <span class="s">"Server"</span><span class="p">,</span>
+                <span class="s">"Receive a message( Rect(left: ${rect.left}, top: ${rect.top}, right: ${rect.right}, bottom: ${rect.bottom}) ) from the client. the number of threads in a blocked state: ${lock.queueLength}"</span>
+            <span class="p">)</span>
+            <span class="k">try</span> <span class="p">{</span>
+                <span class="nf">getSharedPreferences</span><span class="p">(</span><span class="s">"Rect"</span><span class="p">,</span> <span class="nc">MODE_PRIVATE</span><span class="p">).</span><span class="nf">edit</span> <span class="p">{</span>
+                    <span class="nf">putInt</span><span class="p">(</span><span class="s">"Left"</span><span class="p">,</span> <span class="n">rect</span><span class="p">.</span><span class="n">left</span><span class="p">)</span>
+                    <span class="nf">putInt</span><span class="p">(</span><span class="s">"Top"</span><span class="p">,</span> <span class="n">rect</span><span class="p">.</span><span class="n">top</span><span class="p">)</span>
+                    <span class="nf">putInt</span><span class="p">(</span><span class="s">"Right"</span><span class="p">,</span> <span class="n">rect</span><span class="p">.</span><span class="n">right</span><span class="p">)</span>
+                    <span class="nf">putInt</span><span class="p">(</span><span class="s">"Bottom"</span><span class="p">,</span> <span class="n">rect</span><span class="p">.</span><span class="n">bottom</span><span class="p">)</span>
+                <span class="p">}</span>
+                <span class="n">clientMessenger</span><span class="o">?.</span><span class="nf">message</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="k">null</span><span class="p">)</span>
+            <span class="p">}</span> <span class="k">finally</span> <span class="p">{</span>
+                <span class="n">lock</span><span class="p">.</span><span class="nf">unlock</span><span class="p">()</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h6 id="androidmanifest配置">AndroidManifest配置</h6>
+
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+</pre></td><td class="rouge-code"><pre><span class="cp">&lt;?xml version="1.0" encoding="utf-8"?&gt;</span>
+<span class="nt">&lt;manifest</span> <span class="na">xmlns:android=</span><span class="s">"http://schemas.android.com/apk/res/android"</span>
+    <span class="na">package=</span><span class="s">"cn.nikeo.app"</span><span class="nt">&gt;</span>
+
+    <span class="nt">&lt;application</span>
+        <span class="na">android:allowBackup=</span><span class="s">"true"</span>
+        <span class="na">android:icon=</span><span class="s">"@mipmap/ic_launcher"</span>
+        <span class="na">android:label=</span><span class="s">"@string/app_name"</span>
+        <span class="na">android:roundIcon=</span><span class="s">"@mipmap/ic_launcher_round"</span>
+        <span class="na">android:supportsRtl=</span><span class="s">"true"</span>
+        <span class="na">android:theme=</span><span class="s">"@style/Theme.App"</span><span class="nt">&gt;</span>
+        <span class="nt">&lt;service</span>
+            <span class="na">android:name=</span><span class="s">".Server"</span>
+            <span class="na">android:enabled=</span><span class="s">"true"</span>
+            <span class="na">android:exported=</span><span class="s">"false"</span>
+            <span class="na">android:process=</span><span class="s">":server"</span> <span class="nt">/&gt;</span>
+        <span class="nt">&lt;activity</span> <span class="na">android:name=</span><span class="s">".Client"</span><span class="nt">&gt;</span>
+            <span class="nt">&lt;intent-filter&gt;</span>
+                <span class="nt">&lt;action</span> <span class="na">android:name=</span><span class="s">"android.intent.action.MAIN"</span> <span class="nt">/&gt;</span>
+
+                <span class="nt">&lt;category</span> <span class="na">android:name=</span><span class="s">"android.intent.category.LAUNCHER"</span> <span class="nt">/&gt;</span>
+            <span class="nt">&lt;/intent-filter&gt;</span>
+        <span class="nt">&lt;/activity&gt;</span>
+    <span class="nt">&lt;/application&gt;</span>
+
+<span class="nt">&lt;/manifest&gt;</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>当我们在Client多线程发送11次 <code class="language-plaintext highlighter-rouge">saveRect</code> 命令的时候，监测Client端(cn.nikeo.app(7997))进程，打印如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+</pre></td><td class="rouge-code"><pre>2021-01-12 22:32:31.461 7997-8049/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-6,5,main]
+                
+                Send a message( saveRect( Rect(left: 4, top: 4, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.461 7997-8055/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-12,5,main]
+                
+                Send a message( saveRect( Rect(left: 10, top: 10, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.461 7997-8046/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-3,5,main]
+                
+                Send a message( saveRect( Rect(left: 1, top: 1, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.462 7997-8048/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-5,5,main]
+                
+                Send a message( saveRect( Rect(left: 3, top: 3, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.462 7997-8054/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-11,5,main]
+                
+                Send a message( saveRect( Rect(left: 9, top: 9, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.462 7997-8045/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-2,5,main]
+                
+                Send a message( saveRect( Rect(left: 0, top: 0, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.462 7997-8052/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-9,5,main]
+                
+                Send a message( saveRect( Rect(left: 7, top: 7, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.463 7997-8047/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-4,5,main]
+                
+                Send a message( saveRect( Rect(left: 2, top: 2, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.463 7997-8053/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-10,5,main]
+                
+                Send a message( saveRect( Rect(left: 8, top: 8, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.463 7997-8051/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-8,5,main]
+                
+                Send a message( saveRect( Rect(left: 6, top: 6, right: 100, bottom: 100) ) ) from the client.
+2021-01-12 22:32:31.463 7997-8050/cn.nikeo.app I/IPC: "
+                Client
+                Process: 7997
+                Thread:  Thread[Thread-7,5,main]
+                
+                Send a message( saveRect( Rect(left: 5, top: 5, right: 100, bottom: 100) ) ) from the client.
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>监测Server端(cn.nikeo.app:server(8022))进程，打印如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+</pre></td><td class="rouge-code"><pre>2021-01-12 22:32:32.284 8022-8042/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_1,5,main]
+                
+                Receive a message( Rect(left: 10, top: 10, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 0
+2021-01-12 22:32:32.401 8022-8057/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_3,5,main]
+                
+                Receive a message( Rect(left: 1, top: 1, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 9
+2021-01-12 22:32:32.485 8022-8058/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_4,5,main]
+                
+                Receive a message( Rect(left: 3, top: 3, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 8
+2021-01-12 22:32:32.654 8022-8059/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_5,5,main]
+                
+                Receive a message( Rect(left: 9, top: 9, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 7
+2021-01-12 22:32:32.657 8022-8060/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_6,5,main]
+                
+                Receive a message( Rect(left: 0, top: 0, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 6
+2021-01-12 22:32:32.660 8022-8061/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_7,5,main]
+                
+                Receive a message( Rect(left: 7, top: 7, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 5
+2021-01-12 22:32:32.662 8022-8062/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_8,5,main]
+                
+                Receive a message( Rect(left: 2, top: 2, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 4
+2021-01-12 22:32:32.664 8022-8063/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_9,5,main]
+                
+                Receive a message( Rect(left: 8, top: 8, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 3
+2021-01-12 22:32:32.666 8022-8064/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_A,5,main]
+                
+                Receive a message( Rect(left: 6, top: 6, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 2
+2021-01-12 22:32:32.668 8022-8065/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_B,5,main]
+                
+                Receive a message( Rect(left: 5, top: 5, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 1
+2021-01-12 22:32:32.670 8022-8043/cn.nikeo.app I/IPC: "
+                Server
+                Process: 8022
+                Thread:  Thread[Binder:8022_2,5,main]
+                
+                Receive a message( Rect(left: 4, top: 4, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 0
+</pre></td></tr></tbody></table></code></pre></div></div>
+
 
     <p class="signature">&mdash; Lenox&nbsp;Xian</p>
   </div>
