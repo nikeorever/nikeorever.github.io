@@ -259,7 +259,7 @@ public class Square {
 
 <h4 id="classloader">ClassLoader</h4>
 
-<p>ClassLoader是用来将Java类加载到JVM中，Java源代码经过Java编译器( <code class="language-plaintext highlighter-rouge">java</code> 命令)编译成Java字节码文件后，该字节码文件被加载进JVM中解释执行，具体来说，该字节码文件由<strong>ClassLoader</strong>负责读取，然后将其转换成 <code class="language-plaintext highlighter-rouge">java.lang.Class</code> 类的一个实例（Java类），然后我们可以通过 <code class="language-plaintext highlighter-rouge">getConstructor()</code> 和 <code class="language-plaintext highlighter-rouge">newInstance</code> 创建出该类的一个对象。</p>
+<p>ClassLoader是用来将Java类加载到JVM中，Java源代码经过Java编译器( <code class="language-plaintext highlighter-rouge">javac</code> 命令)编译成Java字节码文件后，该字节码文件被加载进JVM中解释执行，具体来说，该字节码文件由<strong>ClassLoader</strong>负责读取，然后将其转换成 <code class="language-plaintext highlighter-rouge">java.lang.Class</code> 类的一个实例（Java类），然后我们可以通过 <code class="language-plaintext highlighter-rouge">getConstructor()</code> 和 <code class="language-plaintext highlighter-rouge">newInstance</code> 创建出该类的一个对象。</p>
 
 <h4 id="分类">分类</h4>
 
@@ -871,7 +871,7 @@ public class Square {
 
 <h5 id="custom-classloader">Custom ClassLoader</h5>
 
-<p>这个ClassLoader是用户根据实际需求自定义的ClassLoader。</p>
+<p>这个ClassLoader是用户根据实际需求自定义的ClassLoader, 如上面提到的 <code class="language-plaintext highlighter-rouge">LocalClassLoader</code>。</p>
 
 <h4 id="classloader-的代理">ClassLoader 的代理</h4>
 

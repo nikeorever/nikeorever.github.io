@@ -76,7 +76,7 @@
 <p>现在<em>new 表达式</em>是将内存分配和初始化结合到一起，<em>delete 表达式</em>是将对象销毁和释放内存结合到一起。但是有些场景下我们需要分开处理，那怎么办呢？我们以一个例子来说明：
  在这个例子中我们需要分配两块连续的内存区域存储<code class="language-plaintext highlighter-rouge">std::uint8_t</code>类型的数据，这种类型占8bit（1B）：</p>
 
-<p>### 使用std::allocator（allocator类是标准库的一部分）</p>
+<h3 id="使用stdallocatorallocator类是标准库的一部分">使用std::allocator（allocator类是标准库的一部分）</h3>
 
 <p>首先分配两块内存区域，大小为<code class="language-plaintext highlighter-rouge">2 * sizeof(std::uint8_t)</code>，也就是2个字节；</p>
 <div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
@@ -128,8 +128,8 @@
 <div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 </pre></td><td class="rouge-code"><pre><span class="n">allocator</span><span class="p">.</span><span class="n">deallocate</span><span class="p">(</span><span class="n">ptr</span><span class="p">,</span> <span class="mi">2</span><span class="p">);</span>
 </pre></td></tr></tbody></table></code></pre></div></div>
-<p>### std::allocator的最终原理？
- allocator其实就是借助标准库的<code class="language-plaintext highlighter-rouge">operator new</code>和<code class="language-plaintext highlighter-rouge">operator delete</code>函数来完成内存分配和销毁的。</p>
+<h3 id="stdallocator的最终原理">std::allocator的最终原理？</h3>
+<p>allocator其实就是借助标准库的<code class="language-plaintext highlighter-rouge">operator new</code>和<code class="language-plaintext highlighter-rouge">operator delete</code>函数来完成内存分配和销毁的。</p>
 <div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
 3

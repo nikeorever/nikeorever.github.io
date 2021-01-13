@@ -81,7 +81,83 @@
 但是有时候我们并不需要<code class="language-plaintext highlighter-rouge">override</code>生命周期中的全部方法，我们可能只需要监听<code class="language-plaintext highlighter-rouge">Activity</code>的创建和销毁，其他不关心，那其实我们只需要<code class="language-plaintext highlighter-rouge">override</code> <code class="language-plaintext highlighter-rouge">fun onActivityCreated(p0: Activity, p1: Bundle?)</code> 和<code class="language-plaintext highlighter-rouge">fun onActivityDestroyed(p0: Activity)</code>，但是由于<code class="language-plaintext highlighter-rouge">ActivityLifecycleCallbacks</code>是一个<code class="language-plaintext highlighter-rouge">interface</code>，首先于语法，我们必须<code class="language-plaintext highlighter-rouge">override</code>所有，即使我们不需要，这对于一个有代码洁癖的人，看到这么多没有内容的空方法是不能接受的，标记为很丑陋的代码。
 这只是Android中的其中之一，向类似这种情况在Android有很多，比如说<code class="language-plaintext highlighter-rouge">TextWatcher</code>，有时候可以在SDK中发现一些抽象类实现了这类接口，然后重写所有抽象方法，然后将其命名为<code class="language-plaintext highlighter-rouge">Default*</code>，这也是一种方式，但并不优雅。</p>
 
-<h4 id="期望中的代码">期望中的代码</h4>
+<h4 id="优化1使用接口动态代理--delegation">优化1：使用接口动态代理 + Delegation</h4>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+</pre></td><td class="rouge-code"><pre><span class="k">import</span> <span class="nn">java.lang.reflect.InvocationHandler</span>
+<span class="k">import</span> <span class="nn">java.lang.reflect.Proxy</span>
+
+<span class="kd">class</span> <span class="nc">MainActivity</span> <span class="p">:</span> <span class="nc">AppCompatActivity</span><span class="p">()</span> <span class="p">{</span>
+
+    <span class="k">override</span> <span class="k">fun</span> <span class="nf">onCreate</span><span class="p">(</span><span class="n">savedInstanceState</span><span class="p">:</span> <span class="nc">Bundle</span><span class="p">?)</span> <span class="p">{</span>
+        <span class="k">super</span><span class="p">.</span><span class="nf">onCreate</span><span class="p">(</span><span class="n">savedInstanceState</span><span class="p">)</span>
+
+        <span class="kd">object</span> <span class="err">: </span><span class="nc">Application</span><span class="p">.</span><span class="nc">ActivityLifecycleCallbacks</span> <span class="k">by</span> <span class="nf">noOpDelegate</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityCreated</span><span class="p">(</span><span class="n">activity</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">,</span> <span class="n">savedInstanceState</span><span class="p">:</span> <span class="nc">Bundle</span><span class="p">?)</span> <span class="p">{</span>
+            <span class="p">}</span>
+
+            <span class="k">override</span> <span class="k">fun</span> <span class="nf">onActivityDestroyed</span><span class="p">(</span><span class="n">activity</span><span class="p">:</span> <span class="nc">Activity</span><span class="p">)</span> <span class="p">{</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+
+        <span class="kd">object</span> <span class="err">: </span><span class="nc">TextWatcher</span> <span class="k">by</span> <span class="nf">noOpDelegate</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">override</span> <span class="k">fun</span> <span class="nf">onTextChanged</span><span class="p">(</span><span class="n">s</span><span class="p">:</span> <span class="nc">CharSequence</span><span class="p">?,</span> <span class="n">start</span><span class="p">:</span> <span class="nc">Int</span><span class="p">,</span> <span class="n">before</span><span class="p">:</span> <span class="nc">Int</span><span class="p">,</span> <span class="n">count</span><span class="p">:</span> <span class="nc">Int</span><span class="p">)</span> <span class="p">{</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="k">companion</span> <span class="k">object</span> <span class="p">{</span>
+        <span class="c1">// https://github.com/square/leakcanary/blob/main/leakcanary-android-utils/src/main/java/leakcanary/internal/Objects.kt</span>
+        <span class="k">inline</span> <span class="k">fun</span> <span class="p">&lt;</span><span class="k">reified</span> <span class="nc">T</span> <span class="p">:</span> <span class="nc">Any</span><span class="p">&gt;</span> <span class="nf">noOpDelegate</span><span class="p">():</span> <span class="nc">T</span> <span class="p">{</span>
+            <span class="kd">val</span> <span class="py">javaClass</span> <span class="p">=</span> <span class="nc">T</span><span class="o">::</span><span class="k">class</span><span class="p">.</span><span class="n">java</span>
+            <span class="k">return</span> <span class="nc">Proxy</span><span class="p">.</span><span class="nf">newProxyInstance</span><span class="p">(</span>
+                <span class="n">javaClass</span><span class="p">.</span><span class="n">classLoader</span><span class="p">,</span> <span class="nf">arrayOf</span><span class="p">(</span><span class="n">javaClass</span><span class="p">),</span> <span class="nc">NO_OP_HANDLER</span>
+            <span class="p">)</span> <span class="k">as</span> <span class="nc">T</span>
+        <span class="p">}</span>
+
+        <span class="kd">val</span> <span class="py">NO_OP_HANDLER</span> <span class="p">=</span> <span class="nc">InvocationHandler</span> <span class="p">{</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="p">-&gt;</span>
+            <span class="c1">// no op</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h4 id="优化2使用dsl">优化2：使用DSL</h4>
 <div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
 3
