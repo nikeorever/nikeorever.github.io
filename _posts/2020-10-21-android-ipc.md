@@ -160,7 +160,7 @@ interface AIDLService {
     String nullableType(@nullable String name);
  ```
 
-##### C/S相互通信
+##### C/S双向通信
 
 ###### AIDL协议文件
 
@@ -503,3 +503,112 @@ class Server : Service() {
                 
                 Receive a message( Rect(left: 4, top: 4, right: 100, bottom: 100) ) from the client. the number of threads in a blocked state: 0
 ```
+
+##### 通信原理（框架层）
+
+从上面的 **C/S双向通信** 可以得到一个基本的通信流程：
+
+```
+ -----------                                                  -----------              
+|Server Side|(Binder Thread)                                 |Client Side| (Any Thread)
+ -----------                                                  -----------
+
+Service.Stub(IBinder(Binder)) <------------------------------> Service.Stub.Proxy(IBinder(BinderProxy))
+    |                                                               | Waiting for response
+onTransact()                                                     transact() 
+    |                                                               | Marshalle data
+ saveRect()                                                      saveRect()
+```
+
+当Client进程与Server进程处于连接状态的时候，双端会拿到用于通信的 `IBinder`对象，这个对象描述了与远程对象通信的协议，Client拿到的实际上是一个 `BinderProxy`，而Server实际上是自定义的 `Service.Stub`，其实它是一个 `Binder`。
+
+我们以 `saveRect` 为例，当Client发送消息的时候，实际使用的 `Service.Stub.Proxy` 发送，这个代理类持有一个用于通信的 `IBinder`（`BinderProxy`），当编组（Marshalling）完要发送的数据对象(`data`)和用于接受消息的回复对象后(`reply`)后，然后使用 `IBinder`（`BinderProxy`）通过transact()将这些数据发送给Server。这个 `BinderProxy` 是一个**native IBinder**的代理，他由 **native**管理，负责将编组的数据传输给底层。
+
+```java
+// android.os.BinderProxy.java
+
+/**
+ * Java proxy for a native IBinder object.
+ * Allocated and constructed by the native javaObjectforIBinder function. Never allocated
+ * directly from Java code.
+ *
+ * @hide
+ */
+public final class BinderProxy implements IBinder {
+    
+    public boolean transact(int code, Parcel data, Parcel reply, int flags) throws RemoteException {
+        ...
+
+        try {
+            return transactNative(code, data, reply, flags);
+        } finally {
+            ...
+        }
+    }
+
+    /**
+     * Native implementation of transact() for proxies
+     */
+    public native boolean transactNative(int code, Parcel data, Parcel reply,
+            int flags) throws RemoteException;
+}
+```
+
+现在底层接受到了编组后数据，现在需要将这个数据发送给Server进程，这里不详细讨论Binder的底层IPC通信原理，这时候我们将目光转到Server端。
+
+前面提到，相较于Client使用 `BinderProxy`作为具体的 `IBinder`，Server则使用 `Binder` 作为具体的 `IBinder`.当Server进程接收到来自Client进程的消息后，底层会调用该 `Binder`对象的 `execTransact` 方法：
+
+```java
+// android.os.Binder.java
+
+public class Binder implements IBinder {
+    ...
+
+    // Entry point from android_util_Binder.cpp's onTransact
+    @UnsupportedAppUsage
+    private boolean execTransact(int code, long dataObj, long replyObj,
+            int flags) {
+        ...
+
+        try {
+            return execTransactInternal(code, dataObj, replyObj, flags, callingUid);
+        } finally {
+            ...
+        }
+    }
+
+    private boolean execTransactInternal(int code, long dataObj, long replyObj, int flags,
+            int callingUid) {
+        ...
+        Parcel data = Parcel.obtain(dataObj);
+        Parcel reply = Parcel.obtain(replyObj);
+        ...
+        try {
+            ...
+            if ((flags & FLAG_COLLECT_NOTED_APP_OPS) != 0) {
+                AppOpsManager.startNotedAppOpsCollection(callingUid);
+                try {
+                    res = onTransact(code, data, reply, flags);
+                } finally {
+                    AppOpsManager.finishNotedAppOpsCollection();
+                }
+            } else {
+                res = onTransact(code, data, reply, flags);
+            }
+        } catch (RemoteException|RuntimeException e) {
+            ...
+        } finally {
+            ...
+        }
+        checkParcel(this, code, reply, "Unreasonably large binder reply buffer");
+        reply.recycle();
+        data.recycle();
+        ...
+        return res;
+    }
+}
+```
+
+最终调用 `Binder`的 `onTransact`，而 `Service.Stub` 这个具体的 `Binder` 对 `onTransact`进行了 `override`，目的就是根据这个方法的第一个参数 `code`，将消息分派给对应的接受者去处理( `android.os.Parcel` -> `android.os.Parcelable`)。当处理完后，回复Client处理结果( `reply.writeNoException()` )。
+
+需要特别注意的是，这一个完整的通信过程是 **同步** 完成的，这意味这只有Server处理完成后，Client的调用才会return，在return之前，调用处所在的线程一直处于 **等待(WAITING)** 状态，所以如果Client调用处是主线程，当Server端处理时间过长，会阻塞主线程，造成ANR。推荐在子线程进行IPC通信。
