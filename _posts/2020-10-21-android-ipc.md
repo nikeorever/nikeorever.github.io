@@ -611,7 +611,7 @@ public class Binder implements IBinder {
 
 最终调用 `Binder`的 `onTransact`，而 `Service.Stub` 这个具体的 `Binder` 对 `onTransact`进行了 `override`，目的就是根据这个方法的第一个参数 `code`，将消息分派给对应的接受者去处理( `android.os.Parcel` -> `android.os.Parcelable`)。当处理完后，回复Client处理结果( `reply.writeNoException()` )。
 
-需要特别注意的是，这一个完整的通信过程是 **同步** 完成的，这意味这只有Server处理完成后，Client的调用才会return，在return之前，调用处所在的线程一直处于 **等待(WAITING)** 状态，所以如果Client调用处是主线程，当Server端处理时间过长，会阻塞主线程，造成ANR。推荐在子线程进行IPC通信。
+需要特别注意的是，这一个完整的通信过程是 **同步** 完成的，这意味这只有Server处理完成后，Client的调用才会return，在return之前，调用处所在的线程一直处于阻塞状态，所以如果Client调用处是主线程，当Server端处理时间过长，会阻塞主线程，造成ANR。推荐在子线程进行IPC通信。
 
 #### Messenger
 
