@@ -146,7 +146,7 @@ fun main() {
 
 #### ClassLoader
 
-ClassLoader是用来将Java类加载到JVM中，Java源代码经过Java编译器( `java` 命令)编译成Java字节码文件后，该字节码文件被加载进JVM中解释执行，具体来说，该字节码文件由**ClassLoader**负责读取，然后将其转换成 `java.lang.Class` 类的一个实例（Java类），然后我们可以通过 `getConstructor()` 和 `newInstance` 创建出该类的一个对象。
+ClassLoader是用来将Java类加载到JVM中，Java源代码经过Java编译器( `javac` 命令)编译成Java字节码文件后，该字节码文件被加载进JVM中解释执行，具体来说，该字节码文件由**ClassLoader**负责读取，然后将其转换成 `java.lang.Class` 类的一个实例（Java类），然后我们可以通过 `getConstructor()` 和 `newInstance` 创建出该类的一个对象。
 
 #### 分类
 
@@ -483,7 +483,7 @@ public class Launcher {
 
 ##### Custom ClassLoader
 
-这个ClassLoader是用户根据实际需求自定义的ClassLoader。
+这个ClassLoader是用户根据实际需求自定义的ClassLoader, 如上面提到的 `LocalClassLoader`。
 
 #### ClassLoader 的代理
 

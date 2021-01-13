@@ -44,10 +44,10 @@ void operator delete(void *mem) noexcept {
  现在*new 表达式*是将内存分配和初始化结合到一起，*delete 表达式*是将对象销毁和释放内存结合到一起。但是有些场景下我们需要分开处理，那怎么办呢？我们以一个例子来说明：
  在这个例子中我们需要分配两块连续的内存区域存储`std::uint8_t`类型的数据，这种类型占8bit（1B）：
  
- ### 使用std::allocator（allocator类是标准库的一部分）
+### 使用std::allocator（allocator类是标准库的一部分）
 
- 首先分配两块内存区域，大小为`2 * sizeof(std::uint8_t)`，也就是2个字节；
- ```c++
+首先分配两块内存区域，大小为`2 * sizeof(std::uint8_t)`，也就是2个字节；
+```c++
 auto allocator = std::allocator<std::uint8_t>();  
 std::uint8_t *ptr = allocator.allocate(2);
  ```
@@ -88,9 +88,9 @@ ptr->~uint8_t();
 ```c++
 allocator.deallocate(ptr, 2);
 ```
- ### std::allocator的最终原理？
- allocator其实就是借助标准库的`operator new`和`operator delete`函数来完成内存分配和销毁的。
- ```c++
+### std::allocator的最终原理？
+allocator其实就是借助标准库的`operator new`和`operator delete`函数来完成内存分配和销毁的。
+```c++
       // NB: __n is permitted to be 0.  The C++ standard says nothing  
  // about what the return value is when __n == 0.  _GLIBCXX_NODISCARD _Tp*  
       allocate(size_type __n, const void* = static_cast<const void*>(0))  

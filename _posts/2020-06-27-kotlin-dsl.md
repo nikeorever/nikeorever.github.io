@@ -39,7 +39,48 @@ application.registerActivityLifecycleCallbacks(object : Application.ActivityLife
 但是有时候我们并不需要`override`生命周期中的全部方法，我们可能只需要监听`Activity`的创建和销毁，其他不关心，那其实我们只需要`override` `fun onActivityCreated(p0: Activity, p1: Bundle?)` 和`fun onActivityDestroyed(p0: Activity)`，但是由于`ActivityLifecycleCallbacks`是一个`interface`，首先于语法，我们必须`override`所有，即使我们不需要，这对于一个有代码洁癖的人，看到这么多没有内容的空方法是不能接受的，标记为很丑陋的代码。
 这只是Android中的其中之一，向类似这种情况在Android有很多，比如说`TextWatcher`，有时候可以在SDK中发现一些抽象类实现了这类接口，然后重写所有抽象方法，然后将其命名为`Default*`，这也是一种方式，但并不优雅。
 
-#### 期望中的代码
+#### 优化1：使用接口动态代理 + Delegation
+
+```kotlin
+import java.lang.reflect.InvocationHandler
+import java.lang.reflect.Proxy
+
+class MainActivity : AppCompatActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        object : Application.ActivityLifecycleCallbacks by noOpDelegate() {
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+            }
+
+            override fun onActivityDestroyed(activity: Activity) {
+            }
+        }
+
+        object : TextWatcher by noOpDelegate() {
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+            }
+        }
+    }
+
+    companion object {
+        // https://github.com/square/leakcanary/blob/main/leakcanary-android-utils/src/main/java/leakcanary/internal/Objects.kt
+        inline fun <reified T : Any> noOpDelegate(): T {
+            val javaClass = T::class.java
+            return Proxy.newProxyInstance(
+                javaClass.classLoader, arrayOf(javaClass), NO_OP_HANDLER
+            ) as T
+        }
+
+        val NO_OP_HANDLER = InvocationHandler { _, _, _ ->
+            // no op
+        }
+    }
+}
+```
+
+#### 优化2：使用DSL
 ```kotlin
 application.registerActivityLifecycleCallbacksDsl {  
   
