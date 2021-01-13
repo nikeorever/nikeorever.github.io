@@ -1094,6 +1094,254 @@ onTransact()                                                     transact()
 
 <p>需要特别注意的是，这一个完整的通信过程是 <strong>同步</strong> 完成的，这意味这只有Server处理完成后，Client的调用才会return，在return之前，调用处所在的线程一直处于 <strong>等待(WAITING)</strong> 状态，所以如果Client调用处是主线程，当Server端处理时间过长，会阻塞主线程，造成ANR。推荐在子线程进行IPC通信。</p>
 
+<h4 id="messenger">Messenger</h4>
+
+<p>理解了AIDL的整个通信流程后，<code class="language-plaintext highlighter-rouge">Messenger</code> 就跟容易理解了，它底层也是使用AIDL进行IPC通信，以下是<a href="// https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/os/IMessenger.aidl">它使用的AIDL文件</a>：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+</pre></td><td class="rouge-code"><pre>//android/os/IMessenger.aidl
+
+**
+** Copyright 2007, The Android Open Source Project
+**
+** Licensed under the Apache License, Version 2.0 (the "License"); 
+** you may not use this file except in compliance with the License. 
+** You may obtain a copy of the License at 
+**
+**     http://www.apache.org/licenses/LICENSE-2.0 
+**
+** Unless required by applicable law or agreed to in writing, software 
+** distributed under the License is distributed on an "AS IS" BASIS, 
+** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
+** See the License for the specific language governing permissions and 
+** limitations under the License.
+*/
+package android.os;
+import android.os.Message;
+/** @hide */
+oneway interface IMessenger {
+    void send(in Message msg);
+}
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>相较于原始的AIDL，它使用 <code class="language-plaintext highlighter-rouge">Handler</code> 来处理 <strong>消息并发</strong>，所以在 <code class="language-plaintext highlighter-rouge">Handler</code> 消息处理（<code class="language-plaintext highlighter-rouge">handleMessage</code>）处不需要进行并发编程，这是线程安全的。</p>
+
+<p>Server所使用的 <code class="language-plaintext highlighter-rouge">IBinder</code>(<code class="language-plaintext highlighter-rouge">Binder</code>)来自于用于接收消息的 <code class="language-plaintext highlighter-rouge">Hander</code>:</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+</pre></td><td class="rouge-code"><pre><span class="c1">// android.os.Messenger.java</span>
+
+<span class="kd">public</span> <span class="kd">final</span> <span class="kd">class</span> <span class="nc">Messenger</span> <span class="kd">implements</span> <span class="nc">Parcelable</span> <span class="o">{</span>
+    <span class="kd">private</span> <span class="kd">final</span> <span class="nc">IMessenger</span> <span class="n">mTarget</span><span class="o">;</span>
+
+    <span class="cm">/**
+     * Create a new Messenger pointing to the given Handler.  Any Message
+     * objects sent through this Messenger will appear in the Handler as if
+     * {@link Handler#sendMessage(Message) Handler.sendMessage(Message)} had
+     * been called directly.
+     * 
+     * @param target The Handler that will receive sent messages.
+     */</span>
+    <span class="kd">public</span> <span class="nf">Messenger</span><span class="o">(</span><span class="nc">Handler</span> <span class="n">target</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">mTarget</span> <span class="o">=</span> <span class="n">target</span><span class="o">.</span><span class="na">getIMessenger</span><span class="o">();</span>
+    <span class="o">}</span>
+
+    <span class="cm">/**
+     * Retrieve the IBinder that this Messenger is using to communicate with
+     * its associated Handler.
+     * 
+     * @return Returns the IBinder backing this Messenger.
+     */</span>
+    <span class="kd">public</span> <span class="nc">IBinder</span> <span class="nf">getBinder</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">mTarget</span><span class="o">.</span><span class="na">asBinder</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>    
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>我们从AIDL的解析可以知道这个对象其实是 <code class="language-plaintext highlighter-rouge">IMessenger.Stub</code> 这个抽象内部类的实例，这个类的实现类(<code class="language-plaintext highlighter-rouge">MessengerImpl</code>)来自于 <code class="language-plaintext highlighter-rouge">Handler</code>：</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+</pre></td><td class="rouge-code"><pre><span class="c1">// android.os.Handler.java</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Handler</span> <span class="o">{</span>
+    <span class="nd">@UnsupportedAppUsage</span>
+    <span class="kd">final</span> <span class="nc">IMessenger</span> <span class="nf">getIMessenger</span><span class="o">()</span> <span class="o">{</span>
+        <span class="kd">synchronized</span> <span class="o">(</span><span class="n">mQueue</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">mMessenger</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                <span class="k">return</span> <span class="n">mMessenger</span><span class="o">;</span>
+            <span class="o">}</span>
+            <span class="n">mMessenger</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">MessengerImpl</span><span class="o">();</span>
+            <span class="k">return</span> <span class="n">mMessenger</span><span class="o">;</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">final</span> <span class="kd">class</span> <span class="nc">MessengerImpl</span> <span class="kd">extends</span> <span class="nc">IMessenger</span><span class="o">.</span><span class="na">Stub</span> <span class="o">{</span>
+        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">send</span><span class="o">(</span><span class="nc">Message</span> <span class="n">msg</span><span class="o">)</span> <span class="o">{</span>
+            <span class="n">msg</span><span class="o">.</span><span class="na">sendingUid</span> <span class="o">=</span> <span class="nc">Binder</span><span class="o">.</span><span class="na">getCallingUid</span><span class="o">();</span>
+            <span class="nc">Handler</span><span class="o">.</span><span class="na">this</span><span class="o">.</span><span class="na">sendMessage</span><span class="o">(</span><span class="n">msg</span><span class="o">);</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>可以看到，当收到消息后（并发），<code class="language-plaintext highlighter-rouge">Handler</code> 负责 <strong>线程安全</strong> 的队列分发这些消息。AIDL进行IPC通信的消息载体是 <code class="language-plaintext highlighter-rouge">android.os.Parcel</code>，它支持将 <code class="language-plaintext highlighter-rouge">android.os.Parcelable</code> 写入到这个消息载体，而 <code class="language-plaintext highlighter-rouge">android.os.Message</code> 就是 <code class="language-plaintext highlighter-rouge">android.os.Parcelable</code>。<code class="language-plaintext highlighter-rouge">android.os.Message</code> 是 <code class="language-plaintext highlighter-rouge">Messenger</code> 唯一可使用的数据类型。</p>
+
+<p>Client使用 <code class="language-plaintext highlighter-rouge">Messenger</code> 发送消息的时候。它会使用 <code class="language-plaintext highlighter-rouge">IBinder</code>(<code class="language-plaintext highlighter-rouge">BinderProxy</code>)进行通信，其实底层还是 <code class="language-plaintext highlighter-rouge">IMessenger.Stub.asInterface()</code>：</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+</pre></td><td class="rouge-code"><pre><span class="c1">// android.os.Messenger.java</span>
+
+<span class="kd">public</span> <span class="kd">final</span> <span class="kd">class</span> <span class="nc">Messenger</span> <span class="kd">implements</span> <span class="nc">Parcelable</span> <span class="o">{</span>
+    <span class="kd">private</span> <span class="kd">final</span> <span class="nc">IMessenger</span> <span class="n">mTarget</span><span class="o">;</span>
+
+    <span class="cm">/**
+     * Send a Message to this Messenger's Handler.
+     * 
+     * @param message The Message to send.  Usually retrieved through
+     * {@link Message#obtain() Message.obtain()}.
+     * 
+     * @throws RemoteException Throws DeadObjectException if the target
+     * Handler no longer exists.
+     */</span>
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">send</span><span class="o">(</span><span class="nc">Message</span> <span class="n">message</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">RemoteException</span> <span class="o">{</span>
+        <span class="n">mTarget</span><span class="o">.</span><span class="na">send</span><span class="o">(</span><span class="n">message</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="cm">/**
+     * Create a Messenger from a raw IBinder, which had previously been
+     * retrieved with {@link #getBinder}.
+     * 
+     * @param target The IBinder this Messenger should communicate with.
+     */</span>
+    <span class="kd">public</span> <span class="nf">Messenger</span><span class="o">(</span><span class="nc">IBinder</span> <span class="n">target</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">mTarget</span> <span class="o">=</span> <span class="nc">IMessenger</span><span class="o">.</span><span class="na">Stub</span><span class="o">.</span><span class="na">asInterface</span><span class="o">(</span><span class="n">target</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>注意到这个 <code class="language-plaintext highlighter-rouge">Messenger</code> 也是个 <code class="language-plaintext highlighter-rouge">Parcelable</code>，这有什么用呢，我们看一下 <code class="language-plaintext highlighter-rouge">android.os.Message</code> 的一个变量：</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre></td><td class="rouge-code"><pre><span class="c1">// android.os.Message.java</span>
+
+<span class="kd">public</span> <span class="kd">final</span> <span class="kd">class</span> <span class="nc">Message</span> <span class="kd">implements</span> <span class="nc">Parcelable</span> <span class="o">{</span>
+    <span class="cm">/**
+     * Optional Messenger where replies to this message can be sent.  The
+     * semantics of exactly how this is used are up to the sender and
+     * receiver.
+     */</span>
+    <span class="kd">public</span> <span class="nc">Messenger</span> <span class="n">replyTo</span><span class="o">;</span>
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>应该很清楚了，它就是用来 <strong>双向通信</strong> 的。</p>
+
 
     <p class="signature">&mdash; Lenox&nbsp;Xian</p>
   </div>
