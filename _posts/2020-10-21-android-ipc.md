@@ -612,3 +612,146 @@ public class Binder implements IBinder {
 最终调用 `Binder`的 `onTransact`，而 `Service.Stub` 这个具体的 `Binder` 对 `onTransact`进行了 `override`，目的就是根据这个方法的第一个参数 `code`，将消息分派给对应的接受者去处理( `android.os.Parcel` -> `android.os.Parcelable`)。当处理完后，回复Client处理结果( `reply.writeNoException()` )。
 
 需要特别注意的是，这一个完整的通信过程是 **同步** 完成的，这意味这只有Server处理完成后，Client的调用才会return，在return之前，调用处所在的线程一直处于 **等待(WAITING)** 状态，所以如果Client调用处是主线程，当Server端处理时间过长，会阻塞主线程，造成ANR。推荐在子线程进行IPC通信。
+
+#### Messenger
+
+理解了AIDL的整个通信流程后，`Messenger` 就跟容易理解了，它底层也是使用AIDL进行IPC通信，以下是[它使用的AIDL文件](// https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/os/IMessenger.aidl)：
+
+```
+//android/os/IMessenger.aidl
+
+**
+** Copyright 2007, The Android Open Source Project
+**
+** Licensed under the Apache License, Version 2.0 (the "License"); 
+** you may not use this file except in compliance with the License. 
+** You may obtain a copy of the License at 
+**
+**     http://www.apache.org/licenses/LICENSE-2.0 
+**
+** Unless required by applicable law or agreed to in writing, software 
+** distributed under the License is distributed on an "AS IS" BASIS, 
+** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
+** See the License for the specific language governing permissions and 
+** limitations under the License.
+*/
+package android.os;
+import android.os.Message;
+/** @hide */
+oneway interface IMessenger {
+    void send(in Message msg);
+}
+```
+
+相较于原始的AIDL，它使用 `Handler` 来处理 **消息并发**，所以在 `Handler` 消息处理（`handleMessage`）处不需要进行并发编程，这是线程安全的。
+
+Server所使用的 `IBinder`(`Binder`)来自于用于接收消息的 `Hander`:
+
+```java
+// android.os.Messenger.java
+
+public final class Messenger implements Parcelable {
+    private final IMessenger mTarget;
+
+    /**
+     * Create a new Messenger pointing to the given Handler.  Any Message
+     * objects sent through this Messenger will appear in the Handler as if
+     * {@link Handler#sendMessage(Message) Handler.sendMessage(Message)} had
+     * been called directly.
+     * 
+     * @param target The Handler that will receive sent messages.
+     */
+    public Messenger(Handler target) {
+        mTarget = target.getIMessenger();
+    }
+
+    /**
+     * Retrieve the IBinder that this Messenger is using to communicate with
+     * its associated Handler.
+     * 
+     * @return Returns the IBinder backing this Messenger.
+     */
+    public IBinder getBinder() {
+        return mTarget.asBinder();
+    }
+}    
+```
+
+我们从AIDL的解析可以知道这个对象其实是 `IMessenger.Stub` 这个抽象内部类的实例，这个类的实现类(`MessengerImpl`)来自于 `Handler`：
+
+```java
+// android.os.Handler.java
+
+public class Handler {
+    @UnsupportedAppUsage
+    final IMessenger getIMessenger() {
+        synchronized (mQueue) {
+            if (mMessenger != null) {
+                return mMessenger;
+            }
+            mMessenger = new MessengerImpl();
+            return mMessenger;
+        }
+    }
+
+    private final class MessengerImpl extends IMessenger.Stub {
+        public void send(Message msg) {
+            msg.sendingUid = Binder.getCallingUid();
+            Handler.this.sendMessage(msg);
+        }
+    }
+}
+
+```
+
+可以看到，当收到消息后（并发），`Handler` 负责 **线程安全** 的队列分发这些消息。AIDL进行IPC通信的消息载体是 `android.os.Parcel`，它支持将 `android.os.Parcelable` 写入到这个消息载体，而 `android.os.Message` 就是 `android.os.Parcelable`。`android.os.Message` 是 `Messenger` 唯一可使用的数据类型。
+
+Client使用 `Messenger` 发送消息的时候。它会使用 `IBinder`(`BinderProxy`)进行通信，其实底层还是 `IMessenger.Stub.asInterface()`：
+
+```java
+// android.os.Messenger.java
+
+public final class Messenger implements Parcelable {
+    private final IMessenger mTarget;
+
+    /**
+     * Send a Message to this Messenger's Handler.
+     * 
+     * @param message The Message to send.  Usually retrieved through
+     * {@link Message#obtain() Message.obtain()}.
+     * 
+     * @throws RemoteException Throws DeadObjectException if the target
+     * Handler no longer exists.
+     */
+    public void send(Message message) throws RemoteException {
+        mTarget.send(message);
+    }
+
+    /**
+     * Create a Messenger from a raw IBinder, which had previously been
+     * retrieved with {@link #getBinder}.
+     * 
+     * @param target The IBinder this Messenger should communicate with.
+     */
+    public Messenger(IBinder target) {
+        mTarget = IMessenger.Stub.asInterface(target);
+    }
+}
+```
+
+注意到这个 `Messenger` 也是个 `Parcelable`，这有什么用呢，我们看一下 `android.os.Message` 的一个变量：
+
+```java
+// android.os.Message.java
+
+public final class Message implements Parcelable {
+    /**
+     * Optional Messenger where replies to this message can be sent.  The
+     * semantics of exactly how this is used are up to the sender and
+     * receiver.
+     */
+    public Messenger replyTo;
+}
+```
+
+应该很清楚了，它就是用来 **双向通信** 的。
