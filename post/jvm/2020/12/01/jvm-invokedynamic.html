@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>InvokeDynamic - Lenox&nbsp;Xian</title>
+  <link rel="stylesheet" href="/static/bootstrap.min.css" type="text/css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans SC:300,400,700" type="text/css">
+  <link rel="stylesheet" href="/static/app.css" type="text/css">
+  <link rel="stylesheet" href="/static/syntax.css" type="text/css">
+</head>
+
+<body>
+  <header>
+    <h1>Lenox&nbsp;Xian</h1>
+    <p>Everything negative-pressure，challenges-is all an opportunity for me to rise</p>
+  </header>
+
+  <div class="content post">
+    <h2>InvokeDynamic</h2>
+    <p class="date">01 December 2020</p>
+
+    <blockquote>
+  <p>这篇文章主要讨论一下JVM中的invokedynamic指令。</p>
+</blockquote>
+
+<h4 id="kotlin1420"><a href="https://kotlinlang.org/docs/reference/whatsnew1420.html">Kotlin(1.4.20)</a></h4>
+
+<p><strong>1.4.20</strong> 版本的Kotlin已经于上个月正式释出，在本次更新中，有一个 <strong>实验性(Experimental)</strong> 的性能优化包含在其中：<strong>Kotlin 1.4.20 can compile string concatenations into dynamic invocations on JVM 9+ targets</strong>。字符串连接将会以新的方式实现，这样可以提高性能。在了解新方式之前，我们先了解一下9以下的JVM字节码：</p>
+
+<p>首先我们定义一个Kotlin文件：FileSuffixAppender.kt，这个文件包含一些可以给文件名添加一些常用后缀的函数。</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+</pre></td><td class="rouge-code"><pre><span class="c1">//cn.nikeo.kotlin.FileSuffixAppender.kt</span>
+
+<span class="k">package</span> <span class="nn">cn.nikeo.kotlin</span>
+
+<span class="k">fun</span> <span class="nf">appendKotlin</span><span class="p">(</span><span class="n">fileName</span><span class="p">:</span> <span class="nc">String</span><span class="p">):</span> <span class="nc">String</span> <span class="p">=</span> <span class="s">"$fileName.kt"</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>此时我们将jvmTarget切换到1.8：</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre></td><td class="rouge-code"><pre><span class="c1">//build.gradle.kts</span>
+
+<span class="n">tasks</span><span class="p">.</span><span class="n">withType</span><span class="p">&lt;</span><span class="n">org</span><span class="p">.</span><span class="n">jetbrains</span><span class="p">.</span><span class="n">kotlin</span><span class="p">.</span><span class="n">gradle</span><span class="p">.</span><span class="n">tasks</span><span class="p">.</span><span class="nc">KotlinCompile</span><span class="p">&gt;</span> <span class="p">{</span>
+    <span class="nf">kotlinOptions</span> <span class="p">{</span>
+        <span class="n">jvmTarget</span> <span class="p">=</span> <span class="s">"1.8"</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>编译完成后，我们查看以下这个文件对应的字节码：</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+</pre></td><td class="rouge-code"><pre><span class="nv">$ </span>./gradlew clean compileKotlin 
+<span class="nv">$ </span>javap <span class="nt">-c</span> build/classes/kotlin/main/cn/nikeo/kotlin/FileSuffixAppenderKt.class 
+Compiled from <span class="s2">"FileSuffixAppender.kt"</span>
+public final class cn.nikeo.kotlin.FileSuffixAppenderKt <span class="o">{</span>
+  public static final java.lang.String appendKotlin<span class="o">(</span>java.lang.String<span class="o">)</span><span class="p">;</span>
+    Code:
+       0: aload_0
+       1: ldc           <span class="c">#9                  // String fileName</span>
+       3: invokestatic  <span class="c">#15                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V</span>
+       6: new           <span class="c">#17                 // class java/lang/StringBuilder</span>
+       9: dup
+      10: invokespecial <span class="c">#21                 // Method java/lang/StringBuilder."&lt;init&gt;":()V</span>
+      13: aload_0
+      14: invokevirtual <span class="c">#25                 // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;</span>
+      17: ldc           <span class="c">#27                 // String .kt</span>
+      19: invokevirtual <span class="c">#25                 // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;</span>
+      22: invokevirtual <span class="c">#31                 // Method java/lang/StringBuilder.toString:()Ljava/lang/String;</span>
+      25: areturn
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>由此我们可以的了解到在 <strong>jvmTarget &lt; 9</strong> 的编译器（kotlinc）下，字符串连接底层使用的是 <code class="language-plaintext highlighter-rouge">java.lang.StringBuilder</code>。</p>
+
+<p>现在我们将jvmTarget切换到9,并且根据文档添加一些编译器参数：</p>
+
+<p>To enable <code class="language-plaintext highlighter-rouge">invokedynamic</code> string concatenation, add the <code class="language-plaintext highlighter-rouge">-Xstring-concat</code> compiler option with one of the following values:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">indy-with-constants</code> to perform <code class="language-plaintext highlighter-rouge">invokedynamic</code> concatenation on strings with <code class="language-plaintext highlighter-rouge">StringConcatFactory.makeConcatWithConstants()</code>.</li>
+  <li><code class="language-plaintext highlighter-rouge">indy</code> to perform <code class="language-plaintext highlighter-rouge">invokedynamic</code> concatenation on strings with <code class="language-plaintext highlighter-rouge">StringConcatFactory.makeConcat()</code>.</li>
+  <li><code class="language-plaintext highlighter-rouge">inline</code> to switch back to the classic concatenation via <code class="language-plaintext highlighter-rouge">StringBuilder.append()</code>.</li>
+</ul>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre></td><td class="rouge-code"><pre><span class="c1">//build.gradle.kts</span>
+
+<span class="n">tasks</span><span class="p">.</span><span class="n">withType</span><span class="p">&lt;</span><span class="n">org</span><span class="p">.</span><span class="n">jetbrains</span><span class="p">.</span><span class="n">kotlin</span><span class="p">.</span><span class="n">gradle</span><span class="p">.</span><span class="n">tasks</span><span class="p">.</span><span class="nc">KotlinCompile</span><span class="p">&gt;</span> <span class="p">{</span>
+    <span class="nf">kotlinOptions</span> <span class="p">{</span>
+        <span class="n">jvmTarget</span> <span class="p">=</span> <span class="s">"9"</span>
+        <span class="n">freeCompilerArgs</span> <span class="p">=</span> <span class="nf">listOf</span><span class="p">(</span>
+            <span class="s">"-Xstring-concat=indy-with-constants"</span>
+        <span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>编译完成后，我们查看以下这个文件对应的字节码：</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre></td><td class="rouge-code"><pre><span class="nv">$ </span>./gradlew clean compileKotlin
+<span class="nv">$ </span>javap <span class="nt">-c</span> build/classes/kotlin/main/cn/nikeo/kotlin/FileSuffixAppenderKt.class 
+Compiled from <span class="s2">"FileSuffixAppender.kt"</span>
+public final class cn.nikeo.kotlin.FileSuffixAppenderKt <span class="o">{</span>
+  public static final java.lang.String appendKotlin<span class="o">(</span>java.lang.String<span class="o">)</span><span class="p">;</span>
+    Code:
+       0: aload_0
+       1: ldc           <span class="c">#9                  // String fileName</span>
+       3: invokestatic  <span class="c">#15                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V</span>
+       6: aload_0
+       7: invokedynamic <span class="c">#26,  0             // InvokeDynamic #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;</span>
+      12: areturn
+<span class="o">}</span>
+
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>由此我们可以的了解到在 <strong>jvmTarget &gt;= 9</strong> 的编译器（kotlinc）下，字符串连接是使用 <code class="language-plaintext highlighter-rouge">invokedynamic</code> 指令调用一个新的方法而完成。</p>
+
+<h4 id="java">Java</h4>
+
+<p>同样的，我们定义一个Java版本的 <code class="language-plaintext highlighter-rouge">FileSuffixAppender</code>：</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre></td><td class="rouge-code"><pre><span class="c1">// cn.nikeo.java.FileSuffixAppender.java</span>
+<span class="kn">package</span> <span class="nn">cn.nikeo.java</span><span class="o">;</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">FileSuffixAppender</span> <span class="o">{</span>
+
+  <span class="kd">public</span> <span class="kd">static</span> <span class="nc">String</span> <span class="nf">java</span><span class="o">(</span><span class="nc">String</span> <span class="n">fileName</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="n">fileName</span> <span class="o">+</span> <span class="s">".java"</span><span class="o">;</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>此时我们切换编译器(javac)的 <code class="language-plaintext highlighter-rouge">sourceCompatibility</code> 和 <code class="language-plaintext highlighter-rouge">targetCompatibility</code> 为 <strong>1.8</strong>：</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td><td class="rouge-code"><pre><span class="c1">// build.gradle.kts</span>
+
+<span class="n">tasks</span><span class="p">.</span><span class="n">withType</span><span class="p">&lt;</span><span class="nc">JavaCompile</span><span class="p">&gt;</span> <span class="p">{</span>
+    <span class="n">sourceCompatibility</span> <span class="p">=</span> <span class="s">"1.8"</span>
+    <span class="n">targetCompatibility</span> <span class="p">=</span> <span class="s">"1.8"</span>
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>编译完成后，我们查看以下这个类对应的字节码：</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+</pre></td><td class="rouge-code"><pre><span class="nv">$ </span>./gradlew clean compileJava
+<span class="nv">$ </span>javap <span class="nt">-c</span> build/classes/java/main/cn/nikeo/java/FileSuffixAppender.class 
+Compiled from <span class="s2">"FileSuffixAppender.java"</span>
+public class cn.nikeo.java.FileSuffixAppender <span class="o">{</span>
+  public cn.nikeo.java.FileSuffixAppender<span class="o">()</span><span class="p">;</span>
+    Code:
+       0: aload_0
+       1: invokespecial <span class="c">#1                  // Method java/lang/Object."&lt;init&gt;":()V</span>
+       4: <span class="k">return
+
+  </span>public static java.lang.String java<span class="o">(</span>java.lang.String<span class="o">)</span><span class="p">;</span>
+    Code:
+       0: new           <span class="c">#2                  // class java/lang/StringBuilder</span>
+       3: dup
+       4: invokespecial <span class="c">#3                  // Method java/lang/StringBuilder."&lt;init&gt;":()V</span>
+       7: aload_0
+       8: invokevirtual <span class="c">#4                  // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;</span>
+      11: ldc           <span class="c">#5                  // String .java</span>
+      13: invokevirtual <span class="c">#4                  // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;</span>
+      16: invokevirtual <span class="c">#6                  // Method java/lang/StringBuilder.toString:()Ljava/lang/String;</span>
+      19: areturn
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>由此我们可以的了解到在 <strong>sourceCompatibility/targetCompatibility &lt; 9</strong> 的编译器（javac）下，字符串连接底层使用的是 <code class="language-plaintext highlighter-rouge">java.lang.StringBuilder</code>。</p>
+
+<p>现在我们将sourceCompatibility/targetCompatibility切换到9：</p>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+</pre></td><td class="rouge-code"><pre><span class="c1">// build.gradle.kts</span>
+
+<span class="n">tasks</span><span class="p">.</span><span class="n">withType</span><span class="p">&lt;</span><span class="nc">JavaCompile</span><span class="p">&gt;</span> <span class="p">{</span>
+    <span class="n">sourceCompatibility</span> <span class="p">=</span> <span class="s">"9"</span>
+    <span class="n">targetCompatibility</span> <span class="p">=</span> <span class="s">"9"</span>
+<span class="p">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>编译完成后，我们查看以下这个类对应的字节码：</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+</pre></td><td class="rouge-code"><pre><span class="nv">$ </span>./gradlew clean compileJava
+<span class="nv">$ </span>javap <span class="nt">-c</span> build/classes/java/main/cn/nikeo/java/FileSuffixAppender.class 
+Compiled from <span class="s2">"FileSuffixAppender.java"</span>
+public class cn.nikeo.java.FileSuffixAppender <span class="o">{</span>
+  public cn.nikeo.java.FileSuffixAppender<span class="o">()</span><span class="p">;</span>
+    Code:
+       0: aload_0
+       1: invokespecial <span class="c">#1                  // Method java/lang/Object."&lt;init&gt;":()V</span>
+       4: <span class="k">return
+
+  </span>public static java.lang.String java<span class="o">(</span>java.lang.String<span class="o">)</span><span class="p">;</span>
+    Code:
+       0: aload_0
+       1: invokedynamic <span class="c">#2,  0              // InvokeDynamic #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;</span>
+       6: areturn
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>由此我们可以的了解到在 <strong>sourceCompatibility/targetCompatibility &gt;= 9</strong> 的编译器（javac）下，字符串连接是使用 <code class="language-plaintext highlighter-rouge">invokedynamic</code> 指令调用一个新的方法而完成。</p>
+
+<h4 id="jvm9-真正执行字符串连接的新方法是什么">JVM9+ 真正执行字符串连接的新方法是什么？</h4>
+
+<p>我们打印字节玛的更多信息以了解 <strong>JVM9+</strong> 真正执行字符串连接的新方法是什么：</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+</pre></td><td class="rouge-code"><pre><span class="nv">$ </span>./gradlew clean compileJava
+<span class="nv">$ </span>javap <span class="nt">-c</span> <span class="nt">-v</span> build/classes/java/main/cn/nikeo/java/FileSuffixAppender.class 
+Classfile /home/lenox/IdeaProjects/bytecode/build/classes/java/main/cn/nikeo/java/FileSuffixAppender.class
+  Last modified Jan 15, 2021<span class="p">;</span> size 861 bytes
+  MD5 checksum 486d3c762ec4d8e0cd4205e86450f6d4
+  Compiled from <span class="s2">"FileSuffixAppender.java"</span>
+public class cn.nikeo.java.FileSuffixAppender
+  minor version: 0
+  major version: 53
+  flags: <span class="o">(</span>0x0021<span class="o">)</span> ACC_PUBLIC, ACC_SUPER
+  this_class: <span class="c">#3                          // cn/nikeo/java/FileSuffixAppender</span>
+  super_class: <span class="c">#4                         // java/lang/Object</span>
+  interfaces: 0, fields: 0, methods: 2, attributes: 3
+Constant pool:
+   <span class="c">#1 = Methodref          #4.#18         // java/lang/Object."&lt;init&gt;":()V</span>
+   <span class="c">#2 = InvokeDynamic      #0:#22         // #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;</span>
+   <span class="c">#3 = Class              #23            // cn/nikeo/java/FileSuffixAppender</span>
+   <span class="c">#4 = Class              #24            // java/lang/Object</span>
+   <span class="c">#5 = Utf8               &lt;init&gt;</span>
+   <span class="c">#6 = Utf8               ()V</span>
+   <span class="c">#7 = Utf8               Code</span>
+   <span class="c">#8 = Utf8               LineNumberTable</span>
+   <span class="c">#9 = Utf8               LocalVariableTable</span>
+  <span class="c">#10 = Utf8               this</span>
+  <span class="c">#11 = Utf8               Lcn/nikeo/java/FileSuffixAppender;</span>
+  <span class="c">#12 = Utf8               java</span>
+  <span class="c">#13 = Utf8               (Ljava/lang/String;)Ljava/lang/String;</span>
+  <span class="c">#14 = Utf8               fileName</span>
+  <span class="c">#15 = Utf8               Ljava/lang/String;</span>
+  <span class="c">#16 = Utf8               SourceFile</span>
+  <span class="c">#17 = Utf8               FileSuffixAppender.java</span>
+  <span class="c">#18 = NameAndType        #5:#6          // "&lt;init&gt;":()V</span>
+  <span class="c">#19 = Utf8               BootstrapMethods</span>
+  <span class="c">#20 = MethodHandle       6:#25          // REF_invokeStatic java/lang/invoke/StringConcatFactory.makeConcatWithConstants:(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;</span>
+  <span class="c">#21 = String             #26            // \u0001.java</span>
+  <span class="c">#22 = NameAndType        #27:#13        // makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;</span>
+  <span class="c">#23 = Utf8               cn/nikeo/java/FileSuffixAppender</span>
+  <span class="c">#24 = Utf8               java/lang/Object</span>
+  <span class="c">#25 = Methodref          #28.#29        // java/lang/invoke/StringConcatFactory.makeConcatWithConstants:(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;</span>
+  <span class="c">#26 = Utf8               \u0001.java</span>
+  <span class="c">#27 = Utf8               makeConcatWithConstants</span>
+  <span class="c">#28 = Class              #30            // java/lang/invoke/StringConcatFactory</span>
+  <span class="c">#29 = NameAndType        #27:#34        // makeConcatWithConstants:(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;</span>
+  <span class="c">#30 = Utf8               java/lang/invoke/StringConcatFactory</span>
+  <span class="c">#31 = Class              #36            // java/lang/invoke/MethodHandles$Lookup</span>
+  <span class="c">#32 = Utf8               Lookup</span>
+  <span class="c">#33 = Utf8               InnerClasses</span>
+  <span class="c">#34 = Utf8               (Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;</span>
+  <span class="c">#35 = Class              #37            // java/lang/invoke/MethodHandles</span>
+  <span class="c">#36 = Utf8               java/lang/invoke/MethodHandles$Lookup</span>
+  <span class="c">#37 = Utf8               java/lang/invoke/MethodHandles</span>
+<span class="o">{</span>
+  public cn.nikeo.java.FileSuffixAppender<span class="o">()</span><span class="p">;</span>
+    descriptor: <span class="o">()</span>V
+    flags: <span class="o">(</span>0x0001<span class="o">)</span> ACC_PUBLIC
+    Code:
+      <span class="nv">stack</span><span class="o">=</span>1, <span class="nv">locals</span><span class="o">=</span>1, <span class="nv">args_size</span><span class="o">=</span>1
+         0: aload_0
+         1: invokespecial <span class="c">#1                  // Method java/lang/Object."&lt;init&gt;":()V</span>
+         4: <span class="k">return
+      </span>LineNumberTable:
+        line 3: 0
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0       5     0  this   Lcn/nikeo/java/FileSuffixAppender<span class="p">;</span>
+
+  public static java.lang.String java<span class="o">(</span>java.lang.String<span class="o">)</span><span class="p">;</span>
+    descriptor: <span class="o">(</span>Ljava/lang/String<span class="p">;</span><span class="o">)</span>Ljava/lang/String<span class="p">;</span>
+    flags: <span class="o">(</span>0x0009<span class="o">)</span> ACC_PUBLIC, ACC_STATIC
+    Code:
+      <span class="nv">stack</span><span class="o">=</span>1, <span class="nv">locals</span><span class="o">=</span>1, <span class="nv">args_size</span><span class="o">=</span>1
+         0: aload_0
+         1: invokedynamic <span class="c">#2,  0              // InvokeDynamic #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;</span>
+         6: areturn
+      LineNumberTable:
+        line 6: 0
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0       7     0 fileName   Ljava/lang/String<span class="p">;</span>
+<span class="o">}</span>
+SourceFile: <span class="s2">"FileSuffixAppender.java"</span>
+InnerClasses:
+  public static final <span class="c">#32= #31 of #35;    // Lookup=class java/lang/invoke/MethodHandles$Lookup of class java/lang/invoke/MethodHandles</span>
+BootstrapMethods:
+  0: <span class="c">#20 REF_invokeStatic java/lang/invoke/StringConcatFactory.makeConcatWithConstants:(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;</span>
+    Method arguments:
+      <span class="c">#21 \u0001.java</span>
+
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>看上去好像是 <code class="language-plaintext highlighter-rouge">java.lang.invoke.StringConcatFactory#makeConcatWithConstants</code>。</p>
+
+<h4 id="invokedynamic">invokedynamic</h4>
+
+<p>Java是一门 <strong>静态类型语言(statically typed language)</strong> ，它在 <strong>编译期（compile time）</strong> 执行类型检查，当一个程序编译时，一个类的所有类型信息，实例变量，方法参数，返回值等等都是可用的，Java编译器可以使用这些类型信息编译出 <strong>强类型（strongly typing）</strong> 的字节玛，从而可以在 <strong>运行时（runtime）</strong> 被JVM有效的执行。</p>
+
+<p>而类似Python/Ruby/Javascript等这些是 <strong>动态类型语言（dynamically typed language）</strong>，它在 <strong>运行时（runtime）</strong>，这些语言在 <strong>编译期（compile time）</strong> 通常没有任何类型信息，一个对象的类型在 <strong>运行时（runtime）</strong> 被确定。</p>
+
+<p><strong>静态类型语言(statically typed language)</strong> 和 <strong>动态类型语言（dynamically typed language）</strong> 可以是 <strong>强类型（strongly typing）</strong> ，也可以是 <strong>弱类型（weak typing）</strong> 。</p>
+
+<p>比如说，对于一个加操作（+），在 <strong>强类型（strongly typing）</strong> 语言中，无论是动态类型，还是静态类型，它的行为都依赖于操作数的类型，一个静态类型语言的编译器会基于操作数的类型选择加操作的实现，比如对于Java编译器而言，如果加操作的操作数是 <code class="language-plaintext highlighter-rouge">Integer</code>类型，则会使用JVM指令 <code class="language-plaintext highlighter-rouge">iadd</code> 作为加操作的实现，加操作将会编译到方法调用处由于JVM的 <code class="language-plaintext highlighter-rouge">iadd</code> 指令要求的操作类型是静态可知的。</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+</pre></td><td class="rouge-code"><pre><span class="kd">public</span> <span class="kd">static</span> <span class="kt">int</span> <span class="nf">add</span><span class="o">(</span><span class="kt">int</span> <span class="n">x</span><span class="o">,</span> <span class="kt">int</span> <span class="n">y</span><span class="o">)</span> <span class="o">{</span>
+  <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span><span class="o">;</span>
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>编译后的字节玛：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+</pre></td><td class="rouge-code"><pre>public static int add(int, int);
+    Code:
+       0: iload_0
+       1: iload_1
+       2: iadd
+       3: ireturn
+
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>相反的是，动态类型语言的编译器延迟选择加操作的实现到运行时，<code class="language-plaintext highlighter-rouge">a + b</code> 也会被编译为 <code class="language-plaintext highlighter-rouge">+(a, b)</code>，后者的 + 是一个方法名（+在JVM中是允许的，但是在Java中的非法的），假设动态类型语言的运行时能够标识 a 和 b 的类型是 Integer，则运行时会优先使用Integer类型在加操作上的实现。</p>
+
+<p>编译动态类型语言所面临最大的挑战是如何实现一个运行时，从而可以选择一个方法或函数最合适的实现。</p>
+
+<p>Java SE 7介绍了一个新的指令-<code class="language-plaintext highlighter-rouge">invokedynamic</code>，它可以用来自定义调用点（call site）与方法实现（method implentation）的链接关系。对于JVM9+字符串连接，它也使用了<code class="language-plaintext highlighter-rouge">invokedynamic</code> 指令，它的调用点是 <code class="language-plaintext highlighter-rouge">+</code>，这个调用点通过 <strong>引导方法（bootstrap method）</strong> 被链接到一个实现方法，这个 <strong>引导方法（bootstrap method）</strong> 就是 <code class="language-plaintext highlighter-rouge">java.lang.invoke.StringConcatFactory#makeConcatWithConstants</code>。</p>
+
+<p>假设我们现在会生成一个名为 cn/nikeo/java/BinaryIntegerCalculator.class 的字节玛文件，要注意的是，这个字节玛不是通过Java文件编译来的，而是我们通过ASM(org.ow2.asm:asm:version)直接生成的。这个字节玛文件对应的Java源文件如下所示(注意这个源文件并不存在):</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+</pre></td><td class="rouge-code"><pre><span class="c1">// cn.nikeo.java.BinaryIntegerCalculator.java</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">BinaryIntegerCalculator</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="kd">final</span> <span class="kt">int</span> <span class="n">a</span><span class="o">;</span>
+
+    <span class="kd">private</span> <span class="kd">final</span> <span class="kt">int</span> <span class="n">b</span><span class="o">;</span>
+
+    <span class="kd">public</span> <span class="nf">BinaryIntegerCalculator</span><span class="o">(</span><span class="kt">int</span> <span class="n">a</span><span class="o">,</span> <span class="kt">int</span> <span class="n">b</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">a</span> <span class="o">=</span> <span class="n">a</span><span class="o">;</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">b</span> <span class="o">=</span> <span class="n">b</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="kt">int</span> <span class="nf">sum</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>很简单，这是一个支持二元运算的计算器，它有一个 <code class="language-plaintext highlighter-rouge">sum</code> 方法用来计算两个值的和。由于这两个值的类型是 <code class="language-plaintext highlighter-rouge">int</code>，所以这个方法进行值相加的默认实现是使用 <code class="language-plaintext highlighter-rouge">iadd</code> JVM指令，但现在我们想把加操作的实现委托给另一个类的方法，这个方法如下所示（它在用户类路经中）：</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre></td><td class="rouge-code"><pre><span class="c1">// cn.nikeo.java.IntegerOpsHelper.java</span>
+
+<span class="kn">package</span> <span class="nn">cn.nikeo.java</span><span class="o">;</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">IntegerOpsHelper</span> <span class="o">{</span>
+  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">int</span> <span class="nf">addExact</span><span class="o">(</span><span class="kt">int</span> <span class="n">x</span><span class="o">,</span> <span class="kt">int</span> <span class="n">y</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="nc">Math</span><span class="o">.</span><span class="na">addExact</span><span class="o">(</span><span class="n">x</span><span class="o">,</span> <span class="n">y</span><span class="o">);</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">IntegerOpsHelper#addExact</code> 这个方法会对加操作后的结果值进行判断，如果超过Integer最大值，则会抛出 <code class="language-plaintext highlighter-rouge">ArithmeticException</code>。</p>
+
+<p>为了实现，我们有两种方式，一种是使用 <code class="language-plaintext highlighter-rouge">invokestatic</code> JVM指令：</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+</pre></td><td class="rouge-code"><pre><span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">sum</span><span class="o">(</span><span class="nc">ClassWriter</span> <span class="n">cw</span><span class="o">)</span> <span class="o">{</span>
+    <span class="nc">MethodVisitor</span> <span class="n">sum</span> <span class="o">=</span> <span class="n">cw</span><span class="o">.</span><span class="na">visitMethod</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">ACC_PUBLIC</span><span class="o">,</span> <span class="s">"sum"</span><span class="o">,</span> <span class="s">"()I"</span><span class="o">,</span> <span class="kc">null</span><span class="o">,</span> <span class="kc">null</span><span class="o">);</span>
+
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitVarInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">ALOAD</span><span class="o">,</span> <span class="mi">0</span><span class="o">);</span>
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitFieldInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">GETFIELD</span><span class="o">,</span> <span class="no">CLASS_REFERENCE</span><span class="o">.</span><span class="na">replace</span><span class="o">(</span><span class="s">"."</span><span class="o">,</span> <span class="nc">File</span><span class="o">.</span><span class="na">separator</span><span class="o">),</span> <span class="s">"a"</span><span class="o">,</span> <span class="s">"I"</span><span class="o">);</span>
+
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitVarInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">ALOAD</span><span class="o">,</span> <span class="mi">0</span><span class="o">);</span>
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitFieldInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">GETFIELD</span><span class="o">,</span> <span class="no">CLASS_REFERENCE</span><span class="o">.</span><span class="na">replace</span><span class="o">(</span><span class="s">"."</span><span class="o">,</span> <span class="nc">File</span><span class="o">.</span><span class="na">separator</span><span class="o">),</span> <span class="s">"b"</span><span class="o">,</span> <span class="s">"I"</span><span class="o">);</span>
+
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitMethodInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">INVOKESTATIC</span><span class="o">,</span> <span class="s">"cn/nikeo/java/IntegerOpsHelper"</span><span class="o">,</span> <span class="s">"addExact"</span><span class="o">,</span> <span class="s">"(II)I"</span><span class="o">,</span>  <span class="kc">false</span><span class="o">);</span>
+
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">IRETURN</span><span class="o">);</span>
+
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitMaxs</span><span class="o">(</span><span class="mi">2</span><span class="o">,</span> <span class="mi">1</span><span class="o">);</span>
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitEnd</span><span class="o">();</span>
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+</pre></td><td class="rouge-code"><pre>  public int sum();
+    descriptor: ()I
+    flags: (0x0001) ACC_PUBLIC
+    Code:
+      stack=2, locals=1, args_size=1
+         0: aload_0
+         1: getfield      #14                 // Field a:I
+         4: aload_0
+         5: getfield      #16                 // Field b:I
+         8: invokestatic  #24                 // Method cn/nikeo/java/IntegerOpsHelper.addExact:(II)I
+        11: ireturn
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>第二种使用 <code class="language-plaintext highlighter-rouge">invokedynamic</code> JVM指令，现在我们已经有了加操作的实现-<code class="language-plaintext highlighter-rouge">cn.nikeo.java.IntegerOpsHelper</code>，还缺一个 <strong>Bootstrap method</strong> 将加操作链接到这个实现上：</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+</pre></td><td class="rouge-code"><pre><span class="kn">package</span> <span class="nn">cn.nikeo.java</span><span class="o">;</span>
+
+<span class="kn">import</span> <span class="nn">java.lang.invoke.CallSite</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.lang.invoke.ConstantCallSite</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.lang.invoke.MethodHandle</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.lang.invoke.MethodHandles</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.lang.invoke.MethodType</span><span class="o">;</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">IntegerOpsFactory</span> <span class="o">{</span>
+
+  <span class="kd">public</span> <span class="kd">static</span> <span class="nc">CallSite</span> <span class="nf">makeAdd</span><span class="o">(</span><span class="nc">MethodHandles</span><span class="o">.</span><span class="na">Lookup</span> <span class="n">callerClass</span><span class="o">,</span> <span class="nc">String</span> <span class="n">dynMethodName</span><span class="o">,</span>
+      <span class="nc">MethodType</span> <span class="n">dynMethodType</span><span class="o">)</span> <span class="kd">throws</span> <span class="nc">Throwable</span> <span class="o">{</span>
+    <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"IntegerOpsFactory#makeAdd"</span><span class="o">);</span>
+
+    <span class="nc">MethodHandle</span> <span class="n">mh</span><span class="o">;</span>
+    <span class="k">if</span> <span class="o">(</span><span class="s">"addExact"</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="n">dynMethodName</span><span class="o">))</span> <span class="o">{</span>
+      <span class="n">mh</span> <span class="o">=</span> <span class="n">callerClass</span><span class="o">.</span><span class="na">findStatic</span><span class="o">(</span><span class="nc">IntegerOpsHelper</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">dynMethodName</span><span class="o">,</span>
+          <span class="nc">MethodType</span><span class="o">.</span><span class="na">methodType</span><span class="o">(</span><span class="kt">int</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="kt">int</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="kt">int</span><span class="o">.</span><span class="na">class</span><span class="o">));</span>
+    <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+      <span class="k">throw</span> <span class="k">new</span> <span class="nf">IllegalArgumentException</span><span class="o">();</span>
+    <span class="o">}</span>
+
+    <span class="k">if</span> <span class="o">(!</span><span class="n">dynMethodType</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="n">mh</span><span class="o">.</span><span class="na">type</span><span class="o">()))</span> <span class="o">{</span>
+      <span class="n">mh</span> <span class="o">=</span> <span class="n">mh</span><span class="o">.</span><span class="na">asType</span><span class="o">(</span><span class="n">dynMethodType</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="k">return</span> <span class="k">new</span> <span class="nf">ConstantCallSite</span><span class="o">(</span><span class="n">mh</span><span class="o">);</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>OK，现在可以使用ASM去实现了：</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+</pre></td><td class="rouge-code"><pre><span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">sum</span><span class="o">(</span><span class="nc">ClassWriter</span> <span class="n">cw</span><span class="o">)</span> <span class="o">{</span>
+    <span class="nc">MethodVisitor</span> <span class="n">sum</span> <span class="o">=</span> <span class="n">cw</span><span class="o">.</span><span class="na">visitMethod</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">ACC_PUBLIC</span><span class="o">,</span> <span class="s">"sum"</span><span class="o">,</span> <span class="s">"()I"</span><span class="o">,</span> <span class="kc">null</span><span class="o">,</span> <span class="kc">null</span><span class="o">);</span>
+
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitVarInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">ALOAD</span><span class="o">,</span> <span class="mi">0</span><span class="o">);</span>
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitFieldInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">GETFIELD</span><span class="o">,</span> <span class="no">CLASS_REFERENCE</span><span class="o">.</span><span class="na">replace</span><span class="o">(</span><span class="s">"."</span><span class="o">,</span> <span class="nc">File</span><span class="o">.</span><span class="na">separator</span><span class="o">),</span> <span class="s">"a"</span><span class="o">,</span> <span class="s">"I"</span><span class="o">);</span>
+
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitVarInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">ALOAD</span><span class="o">,</span> <span class="mi">0</span><span class="o">);</span>
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitFieldInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">GETFIELD</span><span class="o">,</span> <span class="no">CLASS_REFERENCE</span><span class="o">.</span><span class="na">replace</span><span class="o">(</span><span class="s">"."</span><span class="o">,</span> <span class="nc">File</span><span class="o">.</span><span class="na">separator</span><span class="o">),</span> <span class="s">"b"</span><span class="o">,</span> <span class="s">"I"</span><span class="o">);</span>
+
+    <span class="nc">MethodType</span> <span class="n">mt</span> <span class="o">=</span> <span class="nc">MethodType</span><span class="o">.</span><span class="na">methodType</span><span class="o">(</span>
+        <span class="nc">CallSite</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>
+        <span class="nc">MethodHandles</span><span class="o">.</span><span class="na">Lookup</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>
+        <span class="nc">String</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>
+        <span class="nc">MethodType</span><span class="o">.</span><span class="na">class</span>
+    <span class="o">);</span>
+    <span class="nc">Handle</span> <span class="n">bootstrapMethodHandler</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Handle</span><span class="o">(</span>
+        <span class="nc">Opcodes</span><span class="o">.</span><span class="na">H_INVOKESTATIC</span><span class="o">,</span>
+        <span class="nc">Type</span><span class="o">.</span><span class="na">getInternalName</span><span class="o">(</span><span class="nc">IntegerOpsFactory</span><span class="o">.</span><span class="na">class</span><span class="o">),</span>
+        <span class="s">"makeAdd"</span><span class="o">,</span>
+        <span class="n">mt</span><span class="o">.</span><span class="na">toMethodDescriptorString</span><span class="o">(),</span>
+        <span class="kc">false</span>
+    <span class="o">);</span>
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitInvokeDynamicInsn</span><span class="o">(</span><span class="s">"addExact"</span><span class="o">,</span> <span class="s">"(II)I"</span><span class="o">,</span> <span class="n">bootstrapMethodHandler</span><span class="o">);</span>
+
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">IRETURN</span><span class="o">);</span>
+
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitMaxs</span><span class="o">(</span><span class="mi">2</span><span class="o">,</span> <span class="mi">1</span><span class="o">);</span>
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitEnd</span><span class="o">();</span>
+  <span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>查看完整编译后字节玛：</p>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+</pre></td><td class="rouge-code"><pre><span class="nv">$ </span>javap <span class="nt">-c</span> <span class="nt">-v</span> build/classes/java/main/cn/nikeo/java/BinaryIntegerCalculator
+Warning: File ./build/classes/java/main/cn/nikeo/java/BinaryIntegerCalculator.class does not contain class build/classes/java/main/cn/nikeo/java/BinaryIntegerCalculator
+Classfile /home/lenox/IdeaProjects/bytecode/build/classes/java/main/cn/nikeo/java/BinaryIntegerCalculator.class
+  Last modified Jan 15, 2021<span class="p">;</span> size 509 bytes
+  MD5 checksum d2abb2b6a3e16ee7ddac4f8eb30365d7
+public class cn.nikeo.java.BinaryIntegerCalculator
+  minor version: 0
+  major version: 55
+  flags: <span class="o">(</span>0x0021<span class="o">)</span> ACC_PUBLIC, ACC_SUPER
+  this_class: <span class="c">#2                          // cn/nikeo/java/BinaryIntegerCalculator</span>
+  super_class: <span class="c">#4                         // java/lang/Object</span>
+  interfaces: 0, fields: 2, methods: 2, attributes: 1
+Constant pool:
+   <span class="c">#1 = Utf8               cn/nikeo/java/BinaryIntegerCalculator</span>
+   <span class="c">#2 = Class              #1             // cn/nikeo/java/BinaryIntegerCalculator</span>
+   <span class="c">#3 = Utf8               java/lang/Object</span>
+   <span class="c">#4 = Class              #3             // java/lang/Object</span>
+   <span class="c">#5 = Utf8               a</span>
+   <span class="c">#6 = Utf8               I</span>
+   <span class="c">#7 = Utf8               b</span>
+   <span class="c">#8 = Utf8               &lt;init&gt;</span>
+   <span class="c">#9 = Utf8               (II)V</span>
+  <span class="c">#10 = Utf8               ()V</span>
+  <span class="c">#11 = NameAndType        #8:#10         // "&lt;init&gt;":()V</span>
+  <span class="c">#12 = Methodref          #4.#11         // java/lang/Object."&lt;init&gt;":()V</span>
+  <span class="c">#13 = NameAndType        #5:#6          // a:I</span>
+  <span class="c">#14 = Fieldref           #2.#13         // cn/nikeo/java/BinaryIntegerCalculator.a:I</span>
+  <span class="c">#15 = NameAndType        #7:#6          // b:I</span>
+  <span class="c">#16 = Fieldref           #2.#15         // cn/nikeo/java/BinaryIntegerCalculator.b:I</span>
+  <span class="c">#17 = Utf8               sum</span>
+  <span class="c">#18 = Utf8               ()I</span>
+  <span class="c">#19 = Utf8               cn/nikeo/java/IntegerOpsFactory</span>
+  <span class="c">#20 = Class              #19            // cn/nikeo/java/IntegerOpsFactory</span>
+  <span class="c">#21 = Utf8               makeAdd</span>
+  <span class="c">#22 = Utf8               (Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;</span>
+  <span class="c">#23 = NameAndType        #21:#22        // makeAdd:(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;</span>
+  <span class="c">#24 = Methodref          #20.#23        // cn/nikeo/java/IntegerOpsFactory.makeAdd:(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;</span>
+  <span class="c">#25 = MethodHandle       6:#24          // REF_invokeStatic cn/nikeo/java/IntegerOpsFactory.makeAdd:(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;</span>
+  <span class="c">#26 = Utf8               addExact</span>
+  <span class="c">#27 = Utf8               (II)I</span>
+  <span class="c">#28 = NameAndType        #26:#27        // addExact:(II)I</span>
+  <span class="c">#29 = InvokeDynamic      #0:#28         // #0:addExact:(II)I</span>
+  <span class="c">#30 = Utf8               Code</span>
+  <span class="c">#31 = Utf8               BootstrapMethods</span>
+<span class="o">{</span>
+  public cn.nikeo.java.BinaryIntegerCalculator<span class="o">(</span>int, int<span class="o">)</span><span class="p">;</span>
+    descriptor: <span class="o">(</span>II<span class="o">)</span>V
+    flags: <span class="o">(</span>0x0001<span class="o">)</span> ACC_PUBLIC
+    Code:
+      <span class="nv">stack</span><span class="o">=</span>2, <span class="nv">locals</span><span class="o">=</span>3, <span class="nv">args_size</span><span class="o">=</span>3
+         0: aload_0
+         1: invokespecial <span class="c">#12                 // Method java/lang/Object."&lt;init&gt;":()V</span>
+         4: aload_0
+         5: iload_1
+         6: putfield      <span class="c">#14                 // Field a:I</span>
+         9: aload_0
+        10: iload_2
+        11: putfield      <span class="c">#16                 // Field b:I</span>
+        14: <span class="k">return
+
+  </span>public int <span class="nb">sum</span><span class="o">()</span><span class="p">;</span>
+    descriptor: <span class="o">()</span>I
+    flags: <span class="o">(</span>0x0001<span class="o">)</span> ACC_PUBLIC
+    Code:
+      <span class="nv">stack</span><span class="o">=</span>2, <span class="nv">locals</span><span class="o">=</span>1, <span class="nv">args_size</span><span class="o">=</span>1
+         0: aload_0
+         1: getfield      <span class="c">#14                 // Field a:I</span>
+         4: aload_0
+         5: getfield      <span class="c">#16                 // Field b:I</span>
+         8: invokedynamic <span class="c">#29,  0             // InvokeDynamic #0:addExact:(II)I</span>
+        13: ireturn
+<span class="o">}</span>
+BootstrapMethods:
+  0: <span class="c">#25 REF_invokeStatic cn/nikeo/java/IntegerOpsFactory.makeAdd:(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;</span>
+    Method arguments:
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>现在我们来验证以下正常情况：</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre></td><td class="rouge-code"><pre><span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">testSum</span><span class="o">()</span> <span class="o">{</span>
+    <span class="k">try</span> <span class="o">{</span>
+      <span class="nc">Class</span><span class="o">&lt;?&gt;</span> <span class="n">twoOpsCalculatorCls</span> <span class="o">=</span> <span class="nc">ClassLoader</span><span class="o">.</span><span class="na">getSystemClassLoader</span><span class="o">().</span><span class="na">loadClass</span><span class="o">(</span><span class="no">CLASS_REFERENCE</span><span class="o">);</span>
+      <span class="nc">Constructor</span><span class="o">&lt;?&gt;</span> <span class="n">ctr</span> <span class="o">=</span> <span class="n">twoOpsCalculatorCls</span>
+          <span class="o">.</span><span class="na">getConstructor</span><span class="o">(</span><span class="kt">int</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="kt">int</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+      <span class="nc">Object</span> <span class="n">instance</span> <span class="o">=</span> <span class="n">ctr</span><span class="o">.</span><span class="na">newInstance</span><span class="o">(</span><span class="mi">100</span><span class="o">,</span> <span class="mi">2</span><span class="o">);</span>
+
+      <span class="nc">Method</span> <span class="n">sumMethod</span> <span class="o">=</span> <span class="n">twoOpsCalculatorCls</span><span class="o">.</span><span class="na">getMethod</span><span class="o">(</span><span class="s">"sum"</span><span class="o">);</span>
+      <span class="kt">int</span> <span class="n">sumValue</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="n">sumMethod</span><span class="o">.</span><span class="na">invoke</span><span class="o">(</span><span class="n">instance</span><span class="o">);</span>
+      <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">sumValue</span><span class="o">);</span>
+    <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">ClassNotFoundException</span> <span class="o">|</span> <span class="nc">NoSuchMethodException</span> <span class="o">|</span> <span class="nc">IllegalAccessException</span> <span class="o">|</span> <span class="nc">InstantiationException</span> <span class="o">|</span> <span class="nc">InvocationTargetException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+      <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>执行一次这个方法后
+Output:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+</pre></td><td class="rouge-code"><pre>IntegerOpsFactory#makeAdd
+102
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>现在我们来验证以下异常情况：</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre></td><td class="rouge-code"><pre><span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">testSum</span><span class="o">()</span> <span class="o">{</span>
+    <span class="k">try</span> <span class="o">{</span>
+      <span class="nc">Class</span><span class="o">&lt;?&gt;</span> <span class="n">twoOpsCalculatorCls</span> <span class="o">=</span> <span class="nc">ClassLoader</span><span class="o">.</span><span class="na">getSystemClassLoader</span><span class="o">().</span><span class="na">loadClass</span><span class="o">(</span><span class="no">CLASS_REFERENCE</span><span class="o">);</span>
+      <span class="nc">Constructor</span><span class="o">&lt;?&gt;</span> <span class="n">ctr</span> <span class="o">=</span> <span class="n">twoOpsCalculatorCls</span>
+          <span class="o">.</span><span class="na">getConstructor</span><span class="o">(</span><span class="kt">int</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="kt">int</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+      <span class="nc">Object</span> <span class="n">instance</span> <span class="o">=</span> <span class="n">ctr</span><span class="o">.</span><span class="na">newInstance</span><span class="o">(</span><span class="nc">Integer</span><span class="o">.</span><span class="na">MAX_VALUE</span><span class="o">,</span> <span class="mi">1</span><span class="o">);</span>
+
+      <span class="nc">Method</span> <span class="n">sumMethod</span> <span class="o">=</span> <span class="n">twoOpsCalculatorCls</span><span class="o">.</span><span class="na">getMethod</span><span class="o">(</span><span class="s">"sum"</span><span class="o">);</span>
+      <span class="kt">int</span> <span class="n">sumValue</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="n">sumMethod</span><span class="o">.</span><span class="na">invoke</span><span class="o">(</span><span class="n">instance</span><span class="o">);</span>
+      <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">sumValue</span><span class="o">);</span>
+    <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">ClassNotFoundException</span> <span class="o">|</span> <span class="nc">NoSuchMethodException</span> <span class="o">|</span> <span class="nc">IllegalAccessException</span> <span class="o">|</span> <span class="nc">InstantiationException</span> <span class="o">|</span> <span class="nc">InvocationTargetException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+      <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>执行一次这个方法后
+Output:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre></td><td class="rouge-code"><pre>IntegerOpsFactory#makeAdd
+java.lang.reflect.InvocationTargetException
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:566)
+	at cn.nikeo.java.BinaryIntegerCalculatorClassGenerator.testSum(BinaryIntegerCalculatorClassGenerator.java:147)
+	at cn.nikeo.java.Main.main(Main.java:7)
+Caused by: java.lang.ArithmeticException: integer overflow
+	at java.base/java.lang.Math.addExact(Math.java:825)
+	at cn.nikeo.java.IntegerOpsHelper.addExact(IntegerOpsHelper.java:10)
+	at cn.nikeo.java.BinaryIntegerCalculator.sum(Unknown Source)
+	... 6 more
+Caused by: java.lang.ArithmeticException: integer overflow
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>当我们在正常情况下执行3次后，查看打印：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+</pre></td><td class="rouge-code"><pre> IntegerOpsFactory#makeAdd
+102
+102
+102
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>我们注意到 _IntegerOpsFactory#makeAdd_这个只执行了一次，这是因为 <strong>Bootstrap method</strong> 只会被JVM链接 <strong>调用点（call site）</strong> 到 <strong>方法实现</strong> 一次，下次会直接调用方法实现。</p>
+
+<h5 id="源代码完整实现">源代码完整实现</h5>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+136
+137
+138
+139
+140
+141
+142
+143
+144
+145
+146
+147
+148
+149
+150
+151
+152
+153
+154
+155
+</pre></td><td class="rouge-code"><pre><span class="c1">// cn.nikeo.java.BinaryIntegerCalculatorClassGenerator.java</span>
+
+<span class="kn">package</span> <span class="nn">cn.nikeo.java</span><span class="o">;</span>
+
+<span class="kn">import</span> <span class="nn">java.io.File</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.io.FileOutputStream</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.io.IOException</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.lang.invoke.CallSite</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.lang.invoke.MethodHandles</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.lang.invoke.MethodType</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.lang.reflect.Constructor</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.lang.reflect.InvocationTargetException</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">java.lang.reflect.Method</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">org.objectweb.asm.ClassWriter</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">org.objectweb.asm.Handle</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">org.objectweb.asm.MethodVisitor</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">org.objectweb.asm.Opcodes</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">org.objectweb.asm.Type</span><span class="o">;</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">BinaryIntegerCalculatorClassGenerator</span> <span class="o">{</span>
+
+  <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="nc">String</span> <span class="no">CLASS_REFERENCE</span> <span class="o">=</span> <span class="s">"cn.nikeo.java.BinaryIntegerCalculator"</span><span class="o">;</span>
+  <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="nc">String</span> <span class="no">DOT_CLASS</span> <span class="o">=</span> <span class="s">".class"</span><span class="o">;</span>
+
+  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">generateToProjectClasspath</span><span class="o">()</span> <span class="o">{</span>
+    <span class="n">generateTo</span><span class="o">(</span><span class="s">"/home/lenox/IdeaProjects/bytecode/build/classes/java/main/"</span><span class="o">);</span>
+  <span class="o">}</span>
+
+  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">generateTo</span><span class="o">(</span><span class="nc">String</span> <span class="n">classpath</span><span class="o">)</span> <span class="o">{</span>
+    <span class="nc">ClassWriter</span> <span class="n">cw</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">ClassWriter</span><span class="o">(</span><span class="nc">ClassWriter</span><span class="o">.</span><span class="na">COMPUTE_MAXS</span><span class="o">);</span>
+    <span class="n">cw</span><span class="o">.</span><span class="na">visit</span><span class="o">(</span>
+        <span class="nc">Opcodes</span><span class="o">.</span><span class="na">V11</span><span class="o">,</span>
+        <span class="nc">Opcodes</span><span class="o">.</span><span class="na">ACC_PUBLIC</span> <span class="o">|</span> <span class="nc">Opcodes</span><span class="o">.</span><span class="na">ACC_SUPER</span><span class="o">,</span>
+        <span class="no">CLASS_REFERENCE</span><span class="o">.</span><span class="na">replace</span><span class="o">(</span><span class="s">"."</span><span class="o">,</span> <span class="nc">File</span><span class="o">.</span><span class="na">separator</span><span class="o">),</span>
+        <span class="kc">null</span><span class="o">,</span>
+        <span class="nc">Type</span><span class="o">.</span><span class="na">getInternalName</span><span class="o">(</span><span class="nc">Object</span><span class="o">.</span><span class="na">class</span><span class="o">),</span>
+        <span class="kc">null</span>
+    <span class="o">);</span>
+
+    <span class="n">cw</span><span class="o">.</span><span class="na">visitField</span><span class="o">(</span>
+        <span class="nc">Opcodes</span><span class="o">.</span><span class="na">ACC_PRIVATE</span> <span class="o">|</span> <span class="nc">Opcodes</span><span class="o">.</span><span class="na">ACC_FINAL</span><span class="o">,</span>
+        <span class="s">"a"</span><span class="o">,</span>
+        <span class="nc">Type</span><span class="o">.</span><span class="na">INT_TYPE</span><span class="o">.</span><span class="na">getDescriptor</span><span class="o">(),</span>
+        <span class="kc">null</span><span class="o">,</span>
+        <span class="kc">null</span>
+    <span class="o">);</span>
+    <span class="n">cw</span><span class="o">.</span><span class="na">visitField</span><span class="o">(</span>
+        <span class="nc">Opcodes</span><span class="o">.</span><span class="na">ACC_PRIVATE</span> <span class="o">|</span> <span class="nc">Opcodes</span><span class="o">.</span><span class="na">ACC_FINAL</span><span class="o">,</span>
+        <span class="s">"b"</span><span class="o">,</span>
+        <span class="nc">Type</span><span class="o">.</span><span class="na">INT_TYPE</span><span class="o">.</span><span class="na">getDescriptor</span><span class="o">(),</span>
+        <span class="kc">null</span><span class="o">,</span>
+        <span class="kc">null</span>
+    <span class="o">);</span>
+
+    <span class="c1">// constructor start</span>
+    <span class="nc">MethodVisitor</span> <span class="n">constructor</span> <span class="o">=</span> <span class="n">cw</span><span class="o">.</span><span class="na">visitMethod</span><span class="o">(</span>
+        <span class="nc">Opcodes</span><span class="o">.</span><span class="na">ACC_PUBLIC</span><span class="o">,</span>
+        <span class="s">"&lt;init&gt;"</span><span class="o">,</span>
+        <span class="s">"(II)V"</span><span class="o">,</span>
+        <span class="kc">null</span><span class="o">,</span>
+        <span class="kc">null</span>
+    <span class="o">);</span>
+
+    <span class="n">constructor</span><span class="o">.</span><span class="na">visitVarInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">ALOAD</span><span class="o">,</span> <span class="mi">0</span><span class="o">);</span>
+    <span class="n">constructor</span>
+        <span class="o">.</span><span class="na">visitMethodInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">INVOKESPECIAL</span><span class="o">,</span> <span class="nc">Type</span><span class="o">.</span><span class="na">getInternalName</span><span class="o">(</span><span class="nc">Object</span><span class="o">.</span><span class="na">class</span><span class="o">),</span> <span class="s">"&lt;init&gt;"</span><span class="o">,</span> <span class="s">"()V"</span><span class="o">,</span>
+            <span class="kc">false</span><span class="o">);</span>
+
+    <span class="n">constructor</span><span class="o">.</span><span class="na">visitVarInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">ALOAD</span><span class="o">,</span> <span class="mi">0</span><span class="o">);</span>
+    <span class="n">constructor</span><span class="o">.</span><span class="na">visitVarInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">ILOAD</span><span class="o">,</span> <span class="mi">1</span><span class="o">);</span>
+    <span class="n">constructor</span>
+        <span class="o">.</span><span class="na">visitFieldInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">PUTFIELD</span><span class="o">,</span> <span class="no">CLASS_REFERENCE</span><span class="o">.</span><span class="na">replace</span><span class="o">(</span><span class="s">"."</span><span class="o">,</span> <span class="nc">File</span><span class="o">.</span><span class="na">separator</span><span class="o">),</span> <span class="s">"a"</span><span class="o">,</span> <span class="s">"I"</span><span class="o">);</span>
+
+    <span class="n">constructor</span><span class="o">.</span><span class="na">visitVarInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">ALOAD</span><span class="o">,</span> <span class="mi">0</span><span class="o">);</span>
+    <span class="n">constructor</span><span class="o">.</span><span class="na">visitVarInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">ILOAD</span><span class="o">,</span> <span class="mi">2</span><span class="o">);</span>
+    <span class="n">constructor</span>
+        <span class="o">.</span><span class="na">visitFieldInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">PUTFIELD</span><span class="o">,</span> <span class="no">CLASS_REFERENCE</span><span class="o">.</span><span class="na">replace</span><span class="o">(</span><span class="s">"."</span><span class="o">,</span> <span class="nc">File</span><span class="o">.</span><span class="na">separator</span><span class="o">),</span> <span class="s">"b"</span><span class="o">,</span> <span class="s">"I"</span><span class="o">);</span>
+
+    <span class="n">constructor</span><span class="o">.</span><span class="na">visitInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">RETURN</span><span class="o">);</span>
+
+    <span class="n">constructor</span><span class="o">.</span><span class="na">visitMaxs</span><span class="o">(</span><span class="mi">3</span><span class="o">,</span> <span class="mi">3</span><span class="o">);</span>
+    <span class="n">constructor</span><span class="o">.</span><span class="na">visitEnd</span><span class="o">();</span>
+    <span class="c1">// constructor end</span>
+
+    <span class="c1">// sum start</span>
+    <span class="n">sum</span><span class="o">(</span><span class="n">cw</span><span class="o">);</span>
+    <span class="c1">// sum end</span>
+
+    <span class="n">cw</span><span class="o">.</span><span class="na">visitEnd</span><span class="o">();</span>
+
+    <span class="k">try</span> <span class="o">{</span>
+      <span class="nc">String</span> <span class="n">packageName</span> <span class="o">=</span> <span class="no">CLASS_REFERENCE</span><span class="o">.</span><span class="na">substring</span><span class="o">(</span><span class="mi">0</span><span class="o">,</span> <span class="no">CLASS_REFERENCE</span><span class="o">.</span><span class="na">lastIndexOf</span><span class="o">(</span><span class="s">"."</span><span class="o">));</span>
+      <span class="nc">String</span> <span class="n">className</span> <span class="o">=</span> <span class="no">CLASS_REFERENCE</span><span class="o">.</span><span class="na">substring</span><span class="o">(</span><span class="no">CLASS_REFERENCE</span><span class="o">.</span><span class="na">lastIndexOf</span><span class="o">(</span><span class="s">"."</span><span class="o">)</span> <span class="o">+</span> <span class="mi">1</span><span class="o">);</span>
+
+      <span class="k">if</span> <span class="o">(!</span><span class="n">classpath</span><span class="o">.</span><span class="na">endsWith</span><span class="o">(</span><span class="nc">File</span><span class="o">.</span><span class="na">separator</span><span class="o">))</span> <span class="o">{</span>
+        <span class="n">classpath</span> <span class="o">+=</span> <span class="nc">File</span><span class="o">.</span><span class="na">separator</span><span class="o">;</span>
+      <span class="o">}</span>
+      <span class="nc">FileOutputStream</span> <span class="n">fos</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">FileOutputStream</span><span class="o">(</span>
+          <span class="k">new</span> <span class="nf">File</span><span class="o">(</span><span class="n">classpath</span> <span class="o">+</span> <span class="n">packageName</span><span class="o">.</span><span class="na">replace</span><span class="o">(</span><span class="s">"."</span><span class="o">,</span> <span class="nc">File</span><span class="o">.</span><span class="na">separator</span><span class="o">),</span>
+              <span class="n">className</span> <span class="o">+</span> <span class="no">DOT_CLASS</span><span class="o">));</span>
+      <span class="n">fos</span><span class="o">.</span><span class="na">write</span><span class="o">(</span><span class="n">cw</span><span class="o">.</span><span class="na">toByteArray</span><span class="o">());</span>
+      <span class="n">fos</span><span class="o">.</span><span class="na">flush</span><span class="o">();</span>
+      <span class="n">fos</span><span class="o">.</span><span class="na">close</span><span class="o">();</span>
+    <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">IOException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+      <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+
+  <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">sum</span><span class="o">(</span><span class="nc">ClassWriter</span> <span class="n">cw</span><span class="o">)</span> <span class="o">{</span>
+    <span class="nc">MethodVisitor</span> <span class="n">sum</span> <span class="o">=</span> <span class="n">cw</span><span class="o">.</span><span class="na">visitMethod</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">ACC_PUBLIC</span><span class="o">,</span> <span class="s">"sum"</span><span class="o">,</span> <span class="s">"()I"</span><span class="o">,</span> <span class="kc">null</span><span class="o">,</span> <span class="kc">null</span><span class="o">);</span>
+
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitVarInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">ALOAD</span><span class="o">,</span> <span class="mi">0</span><span class="o">);</span>
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitFieldInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">GETFIELD</span><span class="o">,</span> <span class="no">CLASS_REFERENCE</span><span class="o">.</span><span class="na">replace</span><span class="o">(</span><span class="s">"."</span><span class="o">,</span> <span class="nc">File</span><span class="o">.</span><span class="na">separator</span><span class="o">),</span> <span class="s">"a"</span><span class="o">,</span> <span class="s">"I"</span><span class="o">);</span>
+
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitVarInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">ALOAD</span><span class="o">,</span> <span class="mi">0</span><span class="o">);</span>
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitFieldInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">GETFIELD</span><span class="o">,</span> <span class="no">CLASS_REFERENCE</span><span class="o">.</span><span class="na">replace</span><span class="o">(</span><span class="s">"."</span><span class="o">,</span> <span class="nc">File</span><span class="o">.</span><span class="na">separator</span><span class="o">),</span> <span class="s">"b"</span><span class="o">,</span> <span class="s">"I"</span><span class="o">);</span>
+
+    <span class="nc">MethodType</span> <span class="n">mt</span> <span class="o">=</span> <span class="nc">MethodType</span><span class="o">.</span><span class="na">methodType</span><span class="o">(</span>
+        <span class="nc">CallSite</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>
+        <span class="nc">MethodHandles</span><span class="o">.</span><span class="na">Lookup</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>
+        <span class="nc">String</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>
+        <span class="nc">MethodType</span><span class="o">.</span><span class="na">class</span>
+    <span class="o">);</span>
+    <span class="nc">Handle</span> <span class="n">bootstrapMethodHandler</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Handle</span><span class="o">(</span>
+        <span class="nc">Opcodes</span><span class="o">.</span><span class="na">H_INVOKESTATIC</span><span class="o">,</span>
+        <span class="nc">Type</span><span class="o">.</span><span class="na">getInternalName</span><span class="o">(</span><span class="nc">IntegerOpsFactory</span><span class="o">.</span><span class="na">class</span><span class="o">),</span>
+        <span class="s">"makeAdd"</span><span class="o">,</span>
+        <span class="n">mt</span><span class="o">.</span><span class="na">toMethodDescriptorString</span><span class="o">(),</span>
+        <span class="kc">false</span>
+    <span class="o">);</span>
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitInvokeDynamicInsn</span><span class="o">(</span><span class="s">"addExact"</span><span class="o">,</span> <span class="s">"(II)I"</span><span class="o">,</span> <span class="n">bootstrapMethodHandler</span><span class="o">);</span>
+
+<span class="c1">//    sum.visitMethodInsn(Opcodes.INVOKESTATIC, "cn/nikeo/java/IntegerOpsHelper", "addExact", "(II)I",  false);</span>
+
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitInsn</span><span class="o">(</span><span class="nc">Opcodes</span><span class="o">.</span><span class="na">IRETURN</span><span class="o">);</span>
+
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitMaxs</span><span class="o">(</span><span class="mi">2</span><span class="o">,</span> <span class="mi">1</span><span class="o">);</span>
+    <span class="n">sum</span><span class="o">.</span><span class="na">visitEnd</span><span class="o">();</span>
+  <span class="o">}</span>
+
+  <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">testSum</span><span class="o">()</span> <span class="o">{</span>
+    <span class="k">try</span> <span class="o">{</span>
+      <span class="nc">Class</span><span class="o">&lt;?&gt;</span> <span class="n">twoOpsCalculatorCls</span> <span class="o">=</span> <span class="nc">ClassLoader</span><span class="o">.</span><span class="na">getSystemClassLoader</span><span class="o">().</span><span class="na">loadClass</span><span class="o">(</span><span class="no">CLASS_REFERENCE</span><span class="o">);</span>
+      <span class="nc">Constructor</span><span class="o">&lt;?&gt;</span> <span class="n">ctr</span> <span class="o">=</span> <span class="n">twoOpsCalculatorCls</span>
+          <span class="o">.</span><span class="na">getConstructor</span><span class="o">(</span><span class="kt">int</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="kt">int</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+      <span class="nc">Object</span> <span class="n">instance</span> <span class="o">=</span> <span class="n">ctr</span><span class="o">.</span><span class="na">newInstance</span><span class="o">(</span><span class="mi">100</span><span class="o">,</span> <span class="mi">2</span><span class="o">);</span>
+
+      <span class="nc">Method</span> <span class="n">sumMethod</span> <span class="o">=</span> <span class="n">twoOpsCalculatorCls</span><span class="o">.</span><span class="na">getMethod</span><span class="o">(</span><span class="s">"sum"</span><span class="o">);</span>
+      <span class="kt">int</span> <span class="n">sumValue</span> <span class="o">=</span> <span class="o">(</span><span class="kt">int</span><span class="o">)</span> <span class="n">sumMethod</span><span class="o">.</span><span class="na">invoke</span><span class="o">(</span><span class="n">instance</span><span class="o">);</span>
+      <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">sumValue</span><span class="o">);</span>
+    <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">ClassNotFoundException</span> <span class="o">|</span> <span class="nc">NoSuchMethodException</span> <span class="o">|</span> <span class="nc">IllegalAccessException</span> <span class="o">|</span> <span class="nc">InstantiationException</span> <span class="o">|</span> <span class="nc">InvocationTargetException</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+      <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<h4 id="相关链接">相关链接</h4>
+
+<ul>
+  <li><a href="https://docs.oracle.com/javase/specs/jvms/se11/html/">https://docs.oracle.com/javase/specs/jvms/se11/html/</a></li>
+  <li><a href="https://docs.oracle.com/javase/7/docs/technotes/guides/vm/multiple-language-support.html#invokedynamic">https://docs.oracle.com/javase/7/docs/technotes/guides/vm/multiple-language-support.html#invokedynamic</a></li>
+</ul>
+
+
+    <p class="signature">&mdash; Lenox&nbsp;Xian</p>
+  </div>
+  </script>
+</body>
+
+</html>
