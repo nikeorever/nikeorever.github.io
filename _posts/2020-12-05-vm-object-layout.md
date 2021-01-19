@@ -265,7 +265,7 @@ Space losses: 0 bytes internal + 6 bytes external = 6 bytes total
 
 这是我们自己计算出的，我们通过 **Android Profile** Dump Java Heap，查看一个`MemoryActivity`这个对象中的`school`对象的大小，以验证以下我们的计算是否正确：
 
-![](http://127.0.0.1:4000/static/images/2020-12-05-vm-object-layout-profile.png)
+![](https://nikeo.cn/static/images/2020-12-05-vm-object-layout-profile.png)
 
 我们发现这个工具计算出的大小（Shallow Size）为26个字节，小于我们的32个字节，但我们可以发现，我们正好多处6个字节，而这6个字节正好是GAP，所以 **Android Profile** 可能并未计算 external GAP的大小，当然这只是猜测。
 
