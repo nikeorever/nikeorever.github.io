@@ -99,7 +99,7 @@ Space losses: 0 bytes internal + 4 bytes external <span class="o">=</span> 4 byt
 <p>从上面我们可以了解到一个对象基本由三部分构成：Header, Fields, Gap(Optional)：</p>
 
 <ul>
-  <li>Headers：Header的大小并不固定，对于HotSpot VM，它可以是8/12/16字节大小（这里是12字节）。Header包含两部分：<em>markword</em>（对象的元信息），<em>classword</em>（类应用），在32位/64位的模式下，Markword占用4/8个字节，Classword仅仅是个引用，应次它可以在64位模式下被压缩，这也是造成Header的大小不固定的直接原因。</li>
+  <li>Headers：Header的大小并不固定，对于HotSpot VM，它可以是8/12/16字节大小（这里是12字节）。Header包含两部分：<em>markword</em>（对象的元信息），<em>classword</em>（类引用），在32位/64位的模式下，Markword占用4/8个字节，Classword仅仅是个引用，因此它可以在64位模式下被压缩，这也是造成Header的大小不固定的直接原因。</li>
   <li>Fields: 包含当前类及父类的所有属性。</li>
   <li>Gap：这是一块无用的内存空间，由于对象需要被对齐（aligned）导致内存浪费，这些内存成为对象之间的间距。</li>
 </ul>
@@ -130,7 +130,7 @@ Space losses: 0 bytes internal + 4 bytes external <span class="o">=</span> 4 byt
 <span class="o">}</span>
 </pre></td></tr></tbody></table></code></pre></div></div>
 
-<p>然后通过 <code class="language-plaintext highlighter-rouge">sun.misc.Unsafe#objectFieldOffset(Field)</code> 方法获取 <code class="language-plaintext highlighter-rouge">b1</code> 这个Field的Offset，由于只有<code class="language-plaintext highlighter-rouge">b1</code>一个属性，则它的Offset就是Header的大小，我们可以通过JOL查看HeaderClass的布局信息（可以观察_OFFSET_和_SIZE_的值 ）：</p>
+<p>然后通过 <code class="language-plaintext highlighter-rouge">sun.misc.Unsafe#objectFieldOffset(Field)</code> 方法获取 <code class="language-plaintext highlighter-rouge">b1</code> 这个Field的Offset，由于只有<code class="language-plaintext highlighter-rouge">b1</code>一个属性，则它的Offset就是Header的大小，我们可以通过JOL查看HeaderClass的布局信息（可以观察<em>OFFSET</em>和<em>SIZE</em>的值 ）：</p>
 
 <div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
@@ -186,7 +186,7 @@ G   15          1
 
 0 1 2 3 4 5 6 7 8
 |+|+|+|+|G|G|-|-|
-8 9 -------------&gt;
+8 9 -----------&gt;16
 |*|*|G|G|@|@|@|G|
 
 Space losses: (2+2) bytes internal + 1 bytes external = 5 bytes total
@@ -194,13 +194,93 @@ Space losses: (2+2) bytes internal + 1 bytes external = 5 bytes total
 
 <p>所以一个对象的大小 = Size(Header) + Size(Fields) + Size(Gap)</p>
 
-<h5 id="fields在内存中offset">Fields在内存中Offset</h5>
+<h5 id="fields在内存中的排列顺序">Fields在内存中的排列顺序</h5>
 
 <ul>
   <li>前N个字节用于存储父类中所有Fields。</li>
-  <li>当Field被插入的时候，根据他们的大小对齐：<code class="language-plaintext highlighter-rouge">Long</code>以8个字节对齐，<code class="language-plaintext highlighter-rouge">Boolean</code>以1个字节对齐。</li>
-  <li>插入顺序为：引用类型优先，然后基本数据类型（大尺寸 -&gt; 小尺寸）。</li>
+  <li>当Field被插入的时候，根据他们的大小对齐：比如<code class="language-plaintext highlighter-rouge">long</code>以8个字节对齐，<code class="language-plaintext highlighter-rouge">boolean</code>以1个字节对齐，对齐过程中会产生间距。</li>
+  <li>插入顺序为：基本数据类型-&gt;引用类型。</li>
 </ul>
+
+<div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+</pre></td><td class="rouge-code"><pre><span class="c"># Running 64-bit HotSpot VM.</span>
+<span class="c"># Using compressed oop with 3-bit shift.</span>
+<span class="c"># Using compressed klass with 3-bit shift.</span>
+<span class="c"># Objects are 8 bytes aligned.</span>
+<span class="c"># Field sizes by type: 4, 1, 1, 2, 2, 4, 4, 8, 8 [bytes]</span>
+<span class="c"># Array element sizes: 4, 1, 1, 2, 2, 4, 4, 8, 8 [bytes]</span>
+
+Instantiated the sample instance via default constructor.
+
+cn.nikeo.Child object internals:
+ OFFSET  SIZE               TYPE DESCRIPTION                               VALUE
+      0     4                    <span class="o">(</span>object header<span class="o">)</span>                           01 00 00 00 <span class="o">(</span>00000001 00000000 00000000 00000000<span class="o">)</span> <span class="o">(</span>1<span class="o">)</span>
+      4     4                    <span class="o">(</span>object header<span class="o">)</span>                           00 00 00 00 <span class="o">(</span>00000000 00000000 00000000 00000000<span class="o">)</span> <span class="o">(</span>0<span class="o">)</span>
+      8     4                    <span class="o">(</span>object header<span class="o">)</span>                           33 22 01 f8 <span class="o">(</span>00110011 00100010 00000001 11111000<span class="o">)</span> <span class="o">(</span><span class="nt">-134143437</span><span class="o">)</span>
+     12     4                int Parent.myParentInt                        0
+     16     8               long Parent.myParentLong                       0
+     24     8             double Parent.myParenDouble                      0.0
+     32     4              float Parent.myParentFloat                      0.0
+     36     2               char Parent.myParentChar                        
+     38     2              short Parent.myParentShort                      0
+     40     1               byte Parent.myParentByte                       0
+     41     1            boolean Parent.myParentBoolean                    <span class="nb">false
+     </span>42     2                    <span class="o">(</span>alignment/padding gap<span class="o">)</span>                  
+     44     4     java.lang.Long Parent.myParentBoxedLong                  null
+     48     4   java.lang.String Parent.myParentString                     null
+     52     4                int Child.myChildInt                          0
+     56     8               long Child.myChildLong                         0
+     64     8             double Child.myParenDouble                       0.0
+     72     4              float Child.myChildFloat                        0.0
+     76     2               char Child.myChildChar                          
+     78     2              short Child.myChildShort                        0
+     80     1               byte Child.myChildByte                         0
+     81     1            boolean Child.myChildBoolean                      <span class="nb">false
+     </span>82     2                    <span class="o">(</span>alignment/padding gap<span class="o">)</span>                  
+     84     4     java.lang.Long Child.myChildBoxedLong                    null
+     88     4   java.lang.String Child.myChildString                       null
+     92     4                    <span class="o">(</span>loss due to the next object alignment<span class="o">)</span>
+Instance size: 96 bytes
+Space losses: 4 bytes internal + 4 bytes external <span class="o">=</span> 8 bytes total
+</pre></td></tr></tbody></table></code></pre></div></div>
 
 <h4 id="dalvikart-runtime">Dalvik/ART runtime</h4>
 
@@ -408,7 +488,7 @@ Space losses: (2+2) bytes internal + 1 bytes external = 5 bytes total
 <span class="p">}</span>
 </pre></td></tr></tbody></table></code></pre></div></div>
 
-<p>运行后如下打印：</p>
+<p>运行后如下打印(格式化后)：</p>
 
 <div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
@@ -416,11 +496,17 @@ Space losses: (2+2) bytes internal + 1 bytes external = 5 bytes total
 4
 5
 6
-</pre></td><td class="rouge-code"><pre>2021-01-19 20:48:40.660 19030-19030/cn.nikeo.app I/MemoryActivity: <span class="o">(</span>public java.lang.String cn.nikeo.app.School.name, 8<span class="o">)</span>
-    <span class="o">(</span>public int cn.nikeo.app.School.classCount, 12<span class="o">)</span>
-    <span class="o">(</span>public long cn.nikeo.app.School.index, 16<span class="o">)</span>
-    <span class="o">(</span>public boolean cn.nikeo.app.School.open, 24<span class="o">)</span>
-    <span class="o">(</span>public boolean cn.nikeo.app.School.state, 25<span class="o">)</span>
+7
+8
+9
+</pre></td><td class="rouge-code"><pre>2021-01-19 20:48:40.660 19030-19030/cn.nikeo.app I/MemoryActivity: 
+
+    <span class="o">(</span>public java.lang.String cn.nikeo.app.School.name, 8 <span class="o">)</span>
+    <span class="o">(</span>public int cn.nikeo.app.School.classCount,        12<span class="o">)</span>
+    <span class="o">(</span>public long cn.nikeo.app.School.index,            16<span class="o">)</span>
+    <span class="o">(</span>public boolean cn.nikeo.app.School.open,          24<span class="o">)</span>
+    <span class="o">(</span>public boolean cn.nikeo.app.School.state,         25<span class="o">)</span>
+
 2021-01-19 20:48:40.660 19030-19030/cn.nikeo.app I/MemoryActivity: headerSize: 8
 </pre></td></tr></tbody></table></code></pre></div></div>
 
@@ -438,7 +524,7 @@ Space losses: (2+2) bytes internal + 1 bytes external = 5 bytes total
 10
 11
 </pre></td><td class="rouge-code"><pre>               OFFSET  SIZE
-headerSize:    0       8
+    header:    0       8
       name:    8       4
 classCount:    12      4
      index:    16      8

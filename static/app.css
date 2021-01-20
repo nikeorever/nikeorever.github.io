@@ -38,6 +38,9 @@ header p {
     max-width: 1000px;
     line-height: 22px;
 }
+.content img {
+    max-width: 100%;
+}
 .posts li {
     margin-bottom: 10px;
 }
@@ -85,6 +88,18 @@ blockquote {
 
 .post h2 {
     margin-bottom: 10px;
+}
+
+img.float-right {
+    margin: 0 1em .5em 1em;
+    float: right;
+}
+@media (max-width: 500px) {
+    img.float-right {
+      float: none;
+      display: block;
+      margin: 1em auto;
+    }
 }
 
 p.signature {
