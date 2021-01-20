@@ -55,7 +55,7 @@ Space losses: 0 bytes internal + 4 bytes external = 4 bytes total
 
 从上面我们可以了解到一个对象基本由三部分构成：Header, Fields, Gap(Optional)：
 
- - Headers：Header的大小并不固定，对于HotSpot VM，它可以是8/12/16字节大小（这里是12字节）。Header包含两部分：_markword_（对象的元信息），_classword_（类应用），在32位/64位的模式下，Markword占用4/8个字节，Classword仅仅是个引用，应次它可以在64位模式下被压缩，这也是造成Header的大小不固定的直接原因。
+ - Headers：Header的大小并不固定，对于HotSpot VM，它可以是8/12/16字节大小（这里是12字节）。Header包含两部分：_markword_（对象的元信息），_classword_（类引用），在32位/64位的模式下，Markword占用4/8个字节，Classword仅仅是个引用，因此它可以在64位模式下被压缩，这也是造成Header的大小不固定的直接原因。
  - Fields: 包含当前类及父类的所有属性。
  - Gap：这是一块无用的内存空间，由于对象需要被对齐（aligned）导致内存浪费，这些内存成为对象之间的间距。
 
@@ -75,7 +75,7 @@ class Experiments {
 }
 ```
 
-然后通过 `sun.misc.Unsafe#objectFieldOffset(Field)` 方法获取 `b1` 这个Field的Offset，由于只有`b1`一个属性，则它的Offset就是Header的大小，我们可以通过JOL查看HeaderClass的布局信息（可以观察_OFFSET_和_SIZE_的值 ）：
+然后通过 `sun.misc.Unsafe#objectFieldOffset(Field)` 方法获取 `b1` 这个Field的Offset，由于只有`b1`一个属性，则它的Offset就是Header的大小，我们可以通过JOL查看HeaderClass的布局信息（可以观察*OFFSET*和*SIZE*的值 ）：
 
 ```shell
 ...
@@ -106,7 +106,7 @@ G   15          1
 
 0 1 2 3 4 5 6 7 8
 |+|+|+|+|G|G|-|-|
-8 9 ------------->
+8 9 ----------->16
 |*|*|G|G|@|@|@|G|
 
 Space losses: (2+2) bytes internal + 1 bytes external = 5 bytes total
@@ -114,11 +114,53 @@ Space losses: (2+2) bytes internal + 1 bytes external = 5 bytes total
 
 所以一个对象的大小 = Size(Header) + Size(Fields) + Size(Gap)
 
-##### Fields在内存中Offset
+##### Fields在内存中的排列顺序
 
  - 前N个字节用于存储父类中所有Fields。
- - 当Field被插入的时候，根据他们的大小对齐：`Long`以8个字节对齐，`Boolean`以1个字节对齐。
- - 插入顺序为：引用类型优先，然后基本数据类型（大尺寸 -> 小尺寸）。
+ - 当Field被插入的时候，根据他们的大小对齐：比如`long`以8个字节对齐，`boolean`以1个字节对齐，对齐过程中会产生间距。
+ - 插入顺序为：基本数据类型->引用类型。
+
+```shell
+# Running 64-bit HotSpot VM.
+# Using compressed oop with 3-bit shift.
+# Using compressed klass with 3-bit shift.
+# Objects are 8 bytes aligned.
+# Field sizes by type: 4, 1, 1, 2, 2, 4, 4, 8, 8 [bytes]
+# Array element sizes: 4, 1, 1, 2, 2, 4, 4, 8, 8 [bytes]
+
+Instantiated the sample instance via default constructor.
+
+cn.nikeo.Child object internals:
+ OFFSET  SIZE               TYPE DESCRIPTION                               VALUE
+      0     4                    (object header)                           01 00 00 00 (00000001 00000000 00000000 00000000) (1)
+      4     4                    (object header)                           00 00 00 00 (00000000 00000000 00000000 00000000) (0)
+      8     4                    (object header)                           33 22 01 f8 (00110011 00100010 00000001 11111000) (-134143437)
+     12     4                int Parent.myParentInt                        0
+     16     8               long Parent.myParentLong                       0
+     24     8             double Parent.myParenDouble                      0.0
+     32     4              float Parent.myParentFloat                      0.0
+     36     2               char Parent.myParentChar                        
+     38     2              short Parent.myParentShort                      0
+     40     1               byte Parent.myParentByte                       0
+     41     1            boolean Parent.myParentBoolean                    false
+     42     2                    (alignment/padding gap)                  
+     44     4     java.lang.Long Parent.myParentBoxedLong                  null
+     48     4   java.lang.String Parent.myParentString                     null
+     52     4                int Child.myChildInt                          0
+     56     8               long Child.myChildLong                         0
+     64     8             double Child.myParenDouble                       0.0
+     72     4              float Child.myChildFloat                        0.0
+     76     2               char Child.myChildChar                          
+     78     2              short Child.myChildShort                        0
+     80     1               byte Child.myChildByte                         0
+     81     1            boolean Child.myChildBoolean                      false
+     82     2                    (alignment/padding gap)                  
+     84     4     java.lang.Long Child.myChildBoxedLong                    null
+     88     4   java.lang.String Child.myChildString                       null
+     92     4                    (loss due to the next object alignment)
+Instance size: 96 bytes
+Space losses: 4 bytes internal + 4 bytes external = 8 bytes total
+```
 
 #### Dalvik/ART runtime
 
@@ -234,14 +276,17 @@ class MemoryActivity : AppCompatActivity() {
 }
 ```
 
-运行后如下打印：
+运行后如下打印(格式化后)：
 
 ```shell
-2021-01-19 20:48:40.660 19030-19030/cn.nikeo.app I/MemoryActivity: (public java.lang.String cn.nikeo.app.School.name, 8)
-    (public int cn.nikeo.app.School.classCount, 12)
-    (public long cn.nikeo.app.School.index, 16)
-    (public boolean cn.nikeo.app.School.open, 24)
-    (public boolean cn.nikeo.app.School.state, 25)
+2021-01-19 20:48:40.660 19030-19030/cn.nikeo.app I/MemoryActivity: 
+
+    (public java.lang.String cn.nikeo.app.School.name, 8 )
+    (public int cn.nikeo.app.School.classCount,        12)
+    (public long cn.nikeo.app.School.index,            16)
+    (public boolean cn.nikeo.app.School.open,          24)
+    (public boolean cn.nikeo.app.School.state,         25)
+
 2021-01-19 20:48:40.660 19030-19030/cn.nikeo.app I/MemoryActivity: headerSize: 8
 ```
 
@@ -249,7 +294,7 @@ class MemoryActivity : AppCompatActivity() {
 
 ```
                OFFSET  SIZE
-headerSize:    0       8
+    header:    0       8
       name:    8       4
 classCount:    12      4
      index:    16      8
