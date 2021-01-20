@@ -6,7 +6,7 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>从C++的角度看sun.misc.Unsafe - Lenox&nbsp;Xian</title>
+  <title>sun.misc.Unsafe - Lenox&nbsp;Xian</title>
   <link rel="stylesheet" href="/static/bootstrap.min.css" type="text/css">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans SC:300,400,700" type="text/css">
   <link rel="stylesheet" href="/static/app.css" type="text/css">
@@ -20,7 +20,7 @@
   </header>
 
   <div class="content post">
-    <h2>从C++的角度看sun.misc.Unsafe</h2>
+    <h2>sun.misc.Unsafe</h2>
     <p class="date">10 June 2020</p>
 
     <p><code class="language-plaintext highlighter-rouge">Unsafe</code> 提供了一组比较低级（low-level）API允许Java程序员执行一些在Java层面上”不安全”的操作，比如说内存的分配和释放，”不安全”其实是相对的，如果一个Java程序员有一些C/C++开发经验的话，那这些”不安全”的API可以成为程序员窥探Java底层的工具。JDK中有大量的API借助了<code class="language-plaintext highlighter-rouge">Unsafe</code>：比如原子操作类（Atomic*）， <code class="language-plaintext highlighter-rouge">java.util.concurrent.locks.LockSupport</code>，支持并发操作的集合（<code class="language-plaintext highlighter-rouge">java.util.concurrent.ConcurrentHashMap</code>）等等。</p>
