@@ -135,7 +135,11 @@ unsafe.freeMemory(ptr);
 public class Circle {
     public static final double PI = Math.PI;
 
-    public double radius;
+    public final double radius;
+
+    public Circle(double radius) {
+        this.radius = radius;
+    }
 }
 ```
 我们想要获取`radius`这个`Field`的位置，这个位置和这个类对象的布局有关。
@@ -152,9 +156,25 @@ System.out.println(offsetOfRadius); // Output:16
       12     4          (alignment/padding gap)                  
 +     16     8   double Circle.radius                             
 ```
+现在我们想要通过`Unsafe`获取一个`Circle`对象里`radius`属性的值，我们可以这么做：
+```java
+Circle circle = new Circle(200);
+double radius = unsafe.getDouble(circle, unsafe.objectFieldOffset(Circle.class.getField("radius")));
+System.out.println(radius); // Output: 200
+```
+
 我们想要获取`PI`这个静态字段在这个类的存储分配中的位置：
 ```java
 long offsetOfPI = unsafe.staticFieldOffset(Circle.class.getField("PI"));
+```
+现在我们想要通过`Unsafe`获取`Circle`类里`PI`这个静态常量的值，我们可以这么做：
+```java
+Field piField = Circle.class.getField("PI");
+double pi = unsafe.getDouble(
+        unsafe.staticFieldBase(piField),
+        unsafe.staticFieldOffset(piField)
+);
+System.out.println(pi); //Output:3.141592653589793
 ```
 
 #### 原子操作
@@ -170,6 +190,22 @@ long offsetOfPI = unsafe.staticFieldOffset(Circle.class.getField("PI"));
  - getAndSetLong
  - getAndSetObject
 
-### get*() 与 get*Volatile(), put*() 与 put*Volatile()
+#### get/put 
 
-TODO
+在*数组操作*,*内存操作*和*Field offset*的描述中，我们其实已经介绍了get*()/put*()操作，我们整理一下：
+
+对于基础数据类型（`boolean` / `byte` / `char` / `short` / `int` / `long` / `float` / `double`）,它们都有3类get*()，3类put*():
+ - get*(long address)
+ - get*(Object o, long offset)
+ - get*Volatile(Object o, long offset)
+
+ - put*(long address, * value)
+ - put*(Object o, long offset, * value)
+ - put*Volatile(Object o, long offset, * value)
+
+对于Object类型：
+ - getObject(Object o, long offset)
+ - getObjectVolatile(Object o, long offset)
+
+ - putObject(Object o, long offset, Object value)
+ - putObjectVolatile(Object o, long offset, Object value) 
