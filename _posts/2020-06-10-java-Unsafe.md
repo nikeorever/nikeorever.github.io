@@ -101,7 +101,7 @@ unsafe.putByte(ptr, Byte.MAX_VALUE);
 byte value = unsafe.getByte(ptr);
 System.out.println(value); // Output: 127
 ```
-加入已经分配的内存已经不满足需求，我们需要拓展为2个字节，需要注意的是，此时我们超出旧的内存块1个字节，新块的这1个字节是未被初始化的：
+假如已经分配的内存已经不满足需求，我们需要拓展为2个字节，需要注意的是，此时我们超出旧的内存块1个字节，新块的这1个字节是未被初始化的：
 ```java
 ptr = unsafe.reallocateMemory(ptr, 2L);
 ```
