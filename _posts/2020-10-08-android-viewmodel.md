@@ -189,7 +189,13 @@ public class ComponentActivity extends androidx.core.app.ComponentActivity imple
         |                                                                                 |
         +---------------------------------------------------------------------------------+
 ```
-相较于Activity，Fragment的情况相对复杂点，但我们梳理后可以知道最终我们在Fragment中获取到的ViewModelStore来自于**androidx.fragment.app.FragmentManagerViewModel**，这是一个`ViewModel`，它内部维护了一个K-V容器用来存储每个Fragment对应的ViewModelStore。那这个`FragmentManagerViewModel`是怎么创建的呢？
+在梳理`androidx.lifecycle.ViewModel`在`androidx.fragment.app.Fragment`中的设计流程之前，我们需要先了解一些`FragmentManager`的知识：当我们创建了一个直接/间接继承自`androidx.fragment.app.FragmentActivity`的Activity并交给系统，然后系统开始**实例化**这个Activity的时候，同时也会初始化了一个`FragmentManager`（只不过这个`FragmentManager`被`androidx.fragment.app.FragmentHostCallback`直接持有，而`androidx.fragment.app.FragmentController`又直接持有`androidx.fragment.app.FragmentHostCallback`, `androidx.fragment.app.FragmentController`又被`androidx.fragment.app.FragmentActivity`直接持有），所以直接在这个Activity中通过事务提交的Fragments都由这个`FragmentManager`直接管理，并且这些Fragment中持有的`mFragmentManager`也是这个`FragmentManager`。而在这些Fragment中创建的子Fragment由它的创建者Fragment（父Fragment）的`mChildFragmentManager`(在父Fragment实例化的时候初始化)负责管理。
+
+![](https://nikeo.cn/static/images/2020-10-08-android-viewmodel-fragment-fragmentmanager.png)
+
+每个`FragmentManager`持有一个`androidx.fragment.app.FragmentManagerViewModel`,由它负责管理这些Fragments（由这个`FragmentManager`直接管理）中使用的`androidx.lifecycle.ViewModelStore`。
+
+我们在Fragment中获取到的ViewModelStore来自于**androidx.fragment.app.FragmentManagerViewModel**，这是一个`ViewModel`，它内部维护了一个K-V容器用来存储每个Fragment对应的ViewModelStore。那这个`FragmentManagerViewModel`是怎么创建的呢？
 ```java
 // androidx.fragment.app.FragmentManager.java
 
@@ -220,15 +226,16 @@ public abstract class FragmentManager {
     }
 }
 ```
+
 创建`FragmentManagerViewModel`有三种情况：
 
- 1. 第二种情况：
+ 1. 第一种情况：
 
     ```java
     ViewModelStore viewModelStore = ((ViewModelStoreOwner) host).getViewModelStore();
     mNonConfig = FragmentManagerViewModel.getInstance(viewModelStore);
     ```
-    这种是正常的ViewModel的创建方式，`ViewModelStore`来自于`host`，这个`host`实现了`ViewModelStoreOwner`这个接口用来提供`ViewModelStore`，然后我们通过将新创建的`FragmentManagerViewModel`存储到这个`ViewModelStore`中。
+    这种情况发生在`androidx.fragment.app.FragmentActivity`执行到生命周期*onCreate*的时候，此时`host`会attach到`FragmentManager`，这样之后才可以用这个`FragmentManager`管理Fragments。由上述代码可知，`ViewModelStore`来自于`host`，这个`host`实现了`ViewModelStoreOwner`这个接口以提供`ViewModelStore`，然后我们通过将新创建的`FragmentManagerViewModel`存储到这个`ViewModelStore`中。
     ```java
     // androidx.fragment.app.FragmentManagerViewModel.java
 
@@ -280,24 +287,52 @@ public abstract class FragmentManager {
         }
     }
     ```
-    很清楚了，`FragmentActivity`继承自`ComponentActivity`，所以`FragmentManagerViewModel`存储在这个Fragment的宿主Activity中。所以这种创建方式发生在直接或间接继承自`FragmentActivity`的Activity中添加的Fragment中。
+    很清楚了，`FragmentActivity`继承自`ComponentActivity`，所以`FragmentManagerViewModel`存储在这个Fragment的宿主Activity中。
 
  2. 第二种情况 
     
     ```java
     mNonConfig = parent.mFragmentManager.getChildNonConfig(parent);
     ```
-    `parent`是父Fragment，一个Fragment包含两个`FragmentManager`：`mFragmentManager`和`mChildFragmentManager`，后者就是用来管理在这个父Fragment中创建的所有子Fragment，当父Fragment attach的时候，它会在父Fragment关联的`FragmentManagerViewModel`中的`mChildNonConfigs`创建一个新的`FragmentManagerViewModel`（key:父Fragment）供这个`mChildFragmentManager`使用。
 
+    我们知道，一个Fragment包含两个`FragmentManager`：`mFragmentManager`和`mChildFragmentManager`，后者就是用来管理在这个Fragment中创建的所有子Fragment，当这个Fragment attach到`host`的时候，`mChildFragmentManager`会在父Fragment关联的`FragmentManagerViewModel`中的`mChildNonConfigs`创建一个新的`FragmentManagerViewModel`（key:父Fragment）供这个`mChildFragmentManager`所管理的所有Fragments使用。
+    ```java
+    // androidx.fragment.app.Fragment
+
+    package androidx.fragment.app;
+
+    public class Fragment implements ComponentCallbacks, OnCreateContextMenuListener, LifecycleOwner,
+        ViewModelStoreOwner, HasDefaultViewModelProviderFactory, SavedStateRegistryOwner {
+
+        void performAttach() {
+            mChildFragmentManager.attachController(mHost, new FragmentContainer() {
+                @Override
+                @Nullable
+                public View onFindViewById(int id) {
+                    if (mView == null) {
+                        throw new IllegalStateException("Fragment " + this + " does not have a view");
+                    }
+                    return mView.findViewById(id);
+                }
+
+                @Override
+                public boolean onHasView() {
+                    return (mView != null);
+                }
+            }, this);
+            mState = ATTACHED;
+            mCalled = false;
+            onAttach(mHost.getContext());
+            if (!mCalled) {
+                throw new SuperNotCalledException("Fragment " + this
+                        + " did not call through to super.onAttach()");
+            }
+        }
+    }
     ```
-    androidx.fragment.app.FragmentActivity(FragmentManagerViewModel) ==> supportFragmentManager
+    这样意味这我们可以在`androidx.fragment.app.FragmentActivity`的`ViewModelStore`里存储的`FragmentManagerViewModel`通过`mChildNonConfigs`和`mViewModelStores`直接或间接获取到附加到这个Activity上所有的Fragment和子Fragment的`ViewModel`。
 
-    androidx.fragment.app.Fragment@1 -> ViewModelStore@1  (mViewModelStores)
-    androidx.fragment.app.Fragment@1 -> FragmentManagerViewModel@1child (mChildNonConfigs) ==> childFragmentManager
-
-    androidx.fragment.app.Fragment@2 -> ViewModelStore@2  (mViewModelStores)
-    androidx.fragment.app.Fragment@2 -> FragmentManagerViewModel@2child (mChildNonConfigs) ==> childFragmentManager 
-    ```
+    ![](https://nikeo.cn/static/images/2020-10-08-android-viewmodel-fragmentmanagerviewmodel.png)
 
  3. 第三种情况
     
@@ -305,3 +340,13 @@ public abstract class FragmentManager {
     mNonConfig = new FragmentManagerViewModel(false);
     ```
     这种已经废弃，可以不用考虑。
+
+#### androidx.lifecycle.ViewModel
+
+我们平时所使用的`ViewModel`都需要继承这个类，这个类设计的很简单，对于我们来说有用的方法只有一个：`onCleared`，要注意这个方法很重要，当我们的`ViewModel`需要被移除的时候，会调用这个方法，所以我们可以在这个方法对正在观察的数据去取消订阅，关闭正在加载的资源等。
+
+`ViewModel`禁止持有一些如View/Activity/Fragment这些引用，想象一下旋转一个Activity的时候，如果ViewModel持有这个Activity的引用，导致这个Activity在需要被销毁的时候由于ViewModel的引用而导致无法被销毁，导致Activity内存泄漏。
+
+`ViewModel`的存在也简化了`Fragment`与`Fragment`之间的通信：我们只需要定义一个用于Fragment之间共享的ViewModel，然后将它存储在这些Fragment的宿主Activity的ViewModelStore中，然后这些Fragment就都可以获取到这个Fragment，然后相互通信，不需要定义交互接口，不要在宿主Activity中处理过多的逻辑。
+
+`ViewModel`也是官方推荐替换onRetainNonConfigurationInstance去保留所有适当的非配置状态（non-config state）的方法。
