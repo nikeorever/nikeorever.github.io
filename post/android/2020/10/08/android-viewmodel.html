@@ -364,7 +364,13 @@
         |                                                                                 |
         +---------------------------------------------------------------------------------+
 </pre></td></tr></tbody></table></code></pre></div></div>
-<p>相较于Activity，Fragment的情况相对复杂点，但我们梳理后可以知道最终我们在Fragment中获取到的ViewModelStore来自于<strong>androidx.fragment.app.FragmentManagerViewModel</strong>，这是一个<code class="language-plaintext highlighter-rouge">ViewModel</code>，它内部维护了一个K-V容器用来存储每个Fragment对应的ViewModelStore。那这个<code class="language-plaintext highlighter-rouge">FragmentManagerViewModel</code>是怎么创建的呢？</p>
+<p>在梳理<code class="language-plaintext highlighter-rouge">androidx.lifecycle.ViewModel</code>在<code class="language-plaintext highlighter-rouge">androidx.fragment.app.Fragment</code>中的设计流程之前，我们需要先了解一些<code class="language-plaintext highlighter-rouge">FragmentManager</code>的知识：当我们创建了一个直接/间接继承自<code class="language-plaintext highlighter-rouge">androidx.fragment.app.FragmentActivity</code>的Activity并交给系统，然后系统开始<strong>实例化</strong>这个Activity的时候，同时也会初始化了一个<code class="language-plaintext highlighter-rouge">FragmentManager</code>（只不过这个<code class="language-plaintext highlighter-rouge">FragmentManager</code>被<code class="language-plaintext highlighter-rouge">androidx.fragment.app.FragmentHostCallback</code>直接持有，而<code class="language-plaintext highlighter-rouge">androidx.fragment.app.FragmentController</code>又直接持有<code class="language-plaintext highlighter-rouge">androidx.fragment.app.FragmentHostCallback</code>, <code class="language-plaintext highlighter-rouge">androidx.fragment.app.FragmentController</code>又被<code class="language-plaintext highlighter-rouge">androidx.fragment.app.FragmentActivity</code>直接持有），所以直接在这个Activity中通过事务提交的Fragments都由这个<code class="language-plaintext highlighter-rouge">FragmentManager</code>直接管理，并且这些Fragment中持有的<code class="language-plaintext highlighter-rouge">mFragmentManager</code>也是这个<code class="language-plaintext highlighter-rouge">FragmentManager</code>。而在这些Fragment中创建的子Fragment由它的创建者Fragment（父Fragment）的<code class="language-plaintext highlighter-rouge">mChildFragmentManager</code>(在父Fragment实例化的时候初始化)负责管理。</p>
+
+<p><img src="https://nikeo.cn/static/images/2020-10-08-android-viewmodel-fragment-fragmentmanager.png" alt="" /></p>
+
+<p>每个<code class="language-plaintext highlighter-rouge">FragmentManager</code>持有一个<code class="language-plaintext highlighter-rouge">androidx.fragment.app.FragmentManagerViewModel</code>,由它负责管理这些Fragments（由这个<code class="language-plaintext highlighter-rouge">FragmentManager</code>直接管理）中使用的<code class="language-plaintext highlighter-rouge">androidx.lifecycle.ViewModelStore</code>。</p>
+
+<p>我们在Fragment中获取到的ViewModelStore来自于<strong>androidx.fragment.app.FragmentManagerViewModel</strong>，这是一个<code class="language-plaintext highlighter-rouge">ViewModel</code>，它内部维护了一个K-V容器用来存储每个Fragment对应的ViewModelStore。那这个<code class="language-plaintext highlighter-rouge">FragmentManagerViewModel</code>是怎么创建的呢？</p>
 <div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
 3
@@ -422,18 +428,19 @@
     <span class="o">}</span>
 <span class="o">}</span>
 </pre></td></tr></tbody></table></code></pre></div></div>
+
 <p>创建<code class="language-plaintext highlighter-rouge">FragmentManagerViewModel</code>有三种情况：</p>
 
 <ol>
   <li>
-    <p>第二种情况：</p>
+    <p>第一种情况：</p>
 
     <div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
 </pre></td><td class="rouge-code"><pre><span class="nc">ViewModelStore</span> <span class="n">viewModelStore</span> <span class="o">=</span> <span class="o">((</span><span class="nc">ViewModelStoreOwner</span><span class="o">)</span> <span class="n">host</span><span class="o">).</span><span class="na">getViewModelStore</span><span class="o">();</span>
 <span class="n">mNonConfig</span> <span class="o">=</span> <span class="nc">FragmentManagerViewModel</span><span class="o">.</span><span class="na">getInstance</span><span class="o">(</span><span class="n">viewModelStore</span><span class="o">);</span>
 </pre></td></tr></tbody></table></code></pre></div>    </div>
-    <p>这种是正常的ViewModel的创建方式，<code class="language-plaintext highlighter-rouge">ViewModelStore</code>来自于<code class="language-plaintext highlighter-rouge">host</code>，这个<code class="language-plaintext highlighter-rouge">host</code>实现了<code class="language-plaintext highlighter-rouge">ViewModelStoreOwner</code>这个接口用来提供<code class="language-plaintext highlighter-rouge">ViewModelStore</code>，然后我们通过将新创建的<code class="language-plaintext highlighter-rouge">FragmentManagerViewModel</code>存储到这个<code class="language-plaintext highlighter-rouge">ViewModelStore</code>中。</p>
+    <p>这种情况发生在<code class="language-plaintext highlighter-rouge">androidx.fragment.app.FragmentActivity</code>执行到生命周期<em>onCreate</em>的时候，此时<code class="language-plaintext highlighter-rouge">host</code>会attach到<code class="language-plaintext highlighter-rouge">FragmentManager</code>，这样之后才可以用这个<code class="language-plaintext highlighter-rouge">FragmentManager</code>管理Fragments。由上述代码可知，<code class="language-plaintext highlighter-rouge">ViewModelStore</code>来自于<code class="language-plaintext highlighter-rouge">host</code>，这个<code class="language-plaintext highlighter-rouge">host</code>实现了<code class="language-plaintext highlighter-rouge">ViewModelStoreOwner</code>这个接口以提供<code class="language-plaintext highlighter-rouge">ViewModelStore</code>，然后我们通过将新创建的<code class="language-plaintext highlighter-rouge">FragmentManagerViewModel</code>存储到这个<code class="language-plaintext highlighter-rouge">ViewModelStore</code>中。</p>
     <div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
 3
@@ -529,7 +536,7 @@
     <span class="o">}</span>
 <span class="o">}</span>
 </pre></td></tr></tbody></table></code></pre></div>    </div>
-    <p>很清楚了，<code class="language-plaintext highlighter-rouge">FragmentActivity</code>继承自<code class="language-plaintext highlighter-rouge">ComponentActivity</code>，所以<code class="language-plaintext highlighter-rouge">FragmentManagerViewModel</code>存储在这个Fragment的宿主Activity中。所以这种创建方式发生在直接或间接继承自<code class="language-plaintext highlighter-rouge">FragmentActivity</code>的Activity中添加的Fragment中。</p>
+    <p>很清楚了，<code class="language-plaintext highlighter-rouge">FragmentActivity</code>继承自<code class="language-plaintext highlighter-rouge">ComponentActivity</code>，所以<code class="language-plaintext highlighter-rouge">FragmentManagerViewModel</code>存储在这个Fragment的宿主Activity中。</p>
   </li>
   <li>
     <p>第二种情况</p>
@@ -537,23 +544,76 @@
     <div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 </pre></td><td class="rouge-code"><pre><span class="n">mNonConfig</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="na">mFragmentManager</span><span class="o">.</span><span class="na">getChildNonConfig</span><span class="o">(</span><span class="n">parent</span><span class="o">);</span>
 </pre></td></tr></tbody></table></code></pre></div>    </div>
-    <p><code class="language-plaintext highlighter-rouge">parent</code>是父Fragment，一个Fragment包含两个<code class="language-plaintext highlighter-rouge">FragmentManager</code>：<code class="language-plaintext highlighter-rouge">mFragmentManager</code>和<code class="language-plaintext highlighter-rouge">mChildFragmentManager</code>，后者就是用来管理在这个父Fragment中创建的所有子Fragment，当父Fragment attach的时候，它会在父Fragment关联的<code class="language-plaintext highlighter-rouge">FragmentManagerViewModel</code>中的<code class="language-plaintext highlighter-rouge">mChildNonConfigs</code>创建一个新的<code class="language-plaintext highlighter-rouge">FragmentManagerViewModel</code>（key:父Fragment）供这个<code class="language-plaintext highlighter-rouge">mChildFragmentManager</code>使用。</p>
 
-    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+    <p>我们知道，一个Fragment包含两个<code class="language-plaintext highlighter-rouge">FragmentManager</code>：<code class="language-plaintext highlighter-rouge">mFragmentManager</code>和<code class="language-plaintext highlighter-rouge">mChildFragmentManager</code>，后者就是用来管理在这个Fragment中创建的所有子Fragment，当这个Fragment attach到<code class="language-plaintext highlighter-rouge">host</code>的时候，<code class="language-plaintext highlighter-rouge">mChildFragmentManager</code>会在父Fragment关联的<code class="language-plaintext highlighter-rouge">FragmentManagerViewModel</code>中的<code class="language-plaintext highlighter-rouge">mChildNonConfigs</code>创建一个新的<code class="language-plaintext highlighter-rouge">FragmentManagerViewModel</code>（key:父Fragment）供这个<code class="language-plaintext highlighter-rouge">mChildFragmentManager</code>所管理的所有Fragments使用。</p>
+    <div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
 3
 4
 5
 6
 7
-</pre></td><td class="rouge-code"><pre>androidx.fragment.app.FragmentActivity(FragmentManagerViewModel) ==&gt; supportFragmentManager
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+</pre></td><td class="rouge-code"><pre><span class="c1">// androidx.fragment.app.Fragment</span>
 
-androidx.fragment.app.Fragment@1 -&gt; ViewModelStore@1  (mViewModelStores)
-androidx.fragment.app.Fragment@1 -&gt; FragmentManagerViewModel@1child (mChildNonConfigs) ==&gt; childFragmentManager
+<span class="kn">package</span> <span class="nn">androidx.fragment.app</span><span class="o">;</span>
 
-androidx.fragment.app.Fragment@2 -&gt; ViewModelStore@2  (mViewModelStores)
-androidx.fragment.app.Fragment@2 -&gt; FragmentManagerViewModel@2child (mChildNonConfigs) ==&gt; childFragmentManager 
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Fragment</span> <span class="kd">implements</span> <span class="nc">ComponentCallbacks</span><span class="o">,</span> <span class="nc">OnCreateContextMenuListener</span><span class="o">,</span> <span class="nc">LifecycleOwner</span><span class="o">,</span>
+    <span class="nc">ViewModelStoreOwner</span><span class="o">,</span> <span class="nc">HasDefaultViewModelProviderFactory</span><span class="o">,</span> <span class="nc">SavedStateRegistryOwner</span> <span class="o">{</span>
+
+    <span class="kt">void</span> <span class="nf">performAttach</span><span class="o">()</span> <span class="o">{</span>
+        <span class="n">mChildFragmentManager</span><span class="o">.</span><span class="na">attachController</span><span class="o">(</span><span class="n">mHost</span><span class="o">,</span> <span class="k">new</span> <span class="nc">FragmentContainer</span><span class="o">()</span> <span class="o">{</span>
+            <span class="nd">@Override</span>
+            <span class="nd">@Nullable</span>
+            <span class="kd">public</span> <span class="nc">View</span> <span class="nf">onFindViewById</span><span class="o">(</span><span class="kt">int</span> <span class="n">id</span><span class="o">)</span> <span class="o">{</span>
+                <span class="k">if</span> <span class="o">(</span><span class="n">mView</span> <span class="o">==</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+                    <span class="k">throw</span> <span class="k">new</span> <span class="nf">IllegalStateException</span><span class="o">(</span><span class="s">"Fragment "</span> <span class="o">+</span> <span class="k">this</span> <span class="o">+</span> <span class="s">" does not have a view"</span><span class="o">);</span>
+                <span class="o">}</span>
+                <span class="k">return</span> <span class="n">mView</span><span class="o">.</span><span class="na">findViewById</span><span class="o">(</span><span class="n">id</span><span class="o">);</span>
+            <span class="o">}</span>
+
+            <span class="nd">@Override</span>
+            <span class="kd">public</span> <span class="kt">boolean</span> <span class="nf">onHasView</span><span class="o">()</span> <span class="o">{</span>
+                <span class="k">return</span> <span class="o">(</span><span class="n">mView</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">);</span>
+            <span class="o">}</span>
+        <span class="o">},</span> <span class="k">this</span><span class="o">);</span>
+        <span class="n">mState</span> <span class="o">=</span> <span class="no">ATTACHED</span><span class="o">;</span>
+        <span class="n">mCalled</span> <span class="o">=</span> <span class="kc">false</span><span class="o">;</span>
+        <span class="n">onAttach</span><span class="o">(</span><span class="n">mHost</span><span class="o">.</span><span class="na">getContext</span><span class="o">());</span>
+        <span class="k">if</span> <span class="o">(!</span><span class="n">mCalled</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">throw</span> <span class="k">new</span> <span class="nf">SuperNotCalledException</span><span class="o">(</span><span class="s">"Fragment "</span> <span class="o">+</span> <span class="k">this</span>
+                    <span class="o">+</span> <span class="s">" did not call through to super.onAttach()"</span><span class="o">);</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+<span class="o">}</span>
 </pre></td></tr></tbody></table></code></pre></div>    </div>
+    <p>这样意味这我们可以在<code class="language-plaintext highlighter-rouge">androidx.fragment.app.FragmentActivity</code>的<code class="language-plaintext highlighter-rouge">ViewModelStore</code>里存储的<code class="language-plaintext highlighter-rouge">FragmentManagerViewModel</code>通过<code class="language-plaintext highlighter-rouge">mChildNonConfigs</code>和<code class="language-plaintext highlighter-rouge">mViewModelStores</code>直接或间接获取到附加到这个Activity上所有的Fragment和子Fragment的<code class="language-plaintext highlighter-rouge">ViewModel</code>。</p>
+
+    <p><img src="https://nikeo.cn/static/images/2020-10-08-android-viewmodel-fragmentmanagerviewmodel.png" alt="" /></p>
   </li>
   <li>
     <p>第三种情况</p>
@@ -564,6 +624,16 @@ androidx.fragment.app.Fragment@2 -&gt; FragmentManagerViewModel@2child (mChildNo
     <p>这种已经废弃，可以不用考虑。</p>
   </li>
 </ol>
+
+<h4 id="androidxlifecycleviewmodel">androidx.lifecycle.ViewModel</h4>
+
+<p>我们平时所使用的<code class="language-plaintext highlighter-rouge">ViewModel</code>都需要继承这个类，这个类设计的很简单，对于我们来说有用的方法只有一个：<code class="language-plaintext highlighter-rouge">onCleared</code>，要注意这个方法很重要，当我们的<code class="language-plaintext highlighter-rouge">ViewModel</code>需要被移除的时候，会调用这个方法，所以我们可以在这个方法对正在观察的数据去取消订阅，关闭正在加载的资源等。</p>
+
+<p><code class="language-plaintext highlighter-rouge">ViewModel</code>禁止持有一些如View/Activity/Fragment这些引用，想象一下旋转一个Activity的时候，如果ViewModel持有这个Activity的引用，导致这个Activity在需要被销毁的时候由于ViewModel的引用而导致无法被销毁，导致Activity内存泄漏。</p>
+
+<p><code class="language-plaintext highlighter-rouge">ViewModel</code>的存在也简化了<code class="language-plaintext highlighter-rouge">Fragment</code>与<code class="language-plaintext highlighter-rouge">Fragment</code>之间的通信：我们只需要定义一个用于Fragment之间共享的ViewModel，然后将它存储在这些Fragment的宿主Activity的ViewModelStore中，然后这些Fragment就都可以获取到这个Fragment，然后相互通信，不需要定义交互接口，不要在宿主Activity中处理过多的逻辑。</p>
+
+<p><code class="language-plaintext highlighter-rouge">ViewModel</code>也是官方推荐替换onRetainNonConfigurationInstance去保留所有适当的非配置状态（non-config state）的方法。</p>
 
 
     <p class="signature">&mdash; Lenox&nbsp;Xian</p>
