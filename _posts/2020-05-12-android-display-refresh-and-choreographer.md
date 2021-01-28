@@ -1,0 +1,134 @@
+---
+title: '屏幕刷新机制与Choreographer'
+category: 'Android'
+layout: post
+
+categories: post
+---
+
+> 这篇文章主要讨论一下屏幕刷新机制与Android中的Choreographer。
+
+#### 屏幕刷新率（Hz）
+
+屏幕刷新率是指显示器每秒刷新的次数，单位是赫兹（Hz）。我们的显示器面板由许许多多的物理像素组成，比如对于一个分辨率（Resolution）为1080x1920的显示器，那它包含1080*1920个像素点（每行1080个像素点，每列1920个像素点）。
+
+行扫描：显示器画完一行所有的像素点称为行扫描。
+
+场扫描：显示器以行为单位画完所有的像素点成为场扫描。
+
+水平同步信号（HSYNC）：表示开始扫描一行的物理信号。
+
+垂直同步信号（VSYNC）：表示开始扫描一场的物理信号。
+
+比如市面上大部分的设备的屏幕刷新率为60Hz，这意味着每秒会产生60个垂直同步信号（VSYNC）。
+
+场同步周期（VSYNC Period）：指显示器扫描一场所消耗的时间。如对于屏幕刷新率为60Hz的显示器，扫描一场需要消耗16.6(1000/60)ms。
+
+#### 帧率（FPS）
+
+帧率是指数据处理器每秒合成的帧数，单位是FPS（Frames Per Seconds）。比如我们在一秒内滑动了一屏，则这一秒内一共生成了N（N>0）个帧；再比如我们浏览一个静态页面的时候，这时候我显示器一直显示的是缓存中旧的帧，所以在这期间没有新的帧生成。所以帧率是动态的。
+
+#### FrameBuffer
+
+FrameBuffer表示帧缓冲，其消费端来自显示器，而生产端来自数据处理器（CPU,GPU, Surface Flinger）。数据处理器生产一帧的数据到FrameBuffer上，然后显示器从FrameBuffer从上到下逐行扫描到屏幕上，扫描完成后发送垂直同步信号（VSYNC）开始新一轮场扫描，如此循环，这就是显示器的基本原理。
+
+#### 撕裂
+
+起因：假设此时帧率>屏幕刷新率（帧率=120FPS，屏幕刷新率=60Hz），则数据处理器生成一帧只需要8.3（1000/120）ms，而显示器扫描完一场需要16.6（1000/60）ms，假如显示器开始场扫描的时候同时数据处理器开始生产帧，在只有一个FrameBuffer的情况下，当显示器扫描到一半的时候，数据处理器已经生成了一个新的帧并更新到FrameBuffer，所以此时显示器开始扫描的另一半帧并不是上一个旧帧，而是新生成的帧的另一半，这就导致这一场扫描出来的画面是两个帧的组合，导致画面撕裂。
+
+解决：导致画面撕裂的根本原因是FrameBuffer的数据在显示器尚未扫描完就被更新了，所以解决方案就是将数据处理器生成的帧存放在另一个缓冲-BackBuffer，则显示器继续从FrameBuffer读取数据，在未来一个合适的时机，交换FrameBuffer和BackBufer的数据（可以将这个过程看作瞬间完成），这样显示器就会扫描新一帧的数据。但这个合适的时机是什么呢？
+
+ - 假设是BackBuffer写完一帧数据后交换FrameBuffer和BackBuffer，那也有可能发生撕裂。
+ - 假设是显示器从FrameBuffer扫描完这一场数据，发送垂直同步信号，如果BackBuffer已经写完一帧数据，则交换FrameBuffer和BackBuffer。
+
+可见后者才是解决方案，则VSYNC+Double Buffer是解决撕裂的方案。 
+
+#### 卡顿
+
+卡顿主要是由于在显示器正常的同步周期内，没有可用的新帧，导致重复扫描旧的帧，单缓冲下情况更糟，双缓冲有很大的改善，因为数据处理器可以在显示器开始扫描的时候生产新的帧，但是如果在扫描完成后如果新的帧依旧没有在BackBuffer中生成，则依旧会卡顿。
+
+假设此时帧率<屏幕刷新率（帧率=60FPS，屏幕刷新率=120Hz），则数据处理器生成一帧需要16.6（1000/60）ms，而显示器扫描完一场只需要8.3（1000/120）ms，假如FrameBuffer已经有一帧的数据，显示器开始场扫描的时候同时数据处理器开始生产帧，8.3ms后扫描完毕，发生垂直同步信息开始扫描下一帧，但是数据处理器距离一帧生成还需要8.3ms，所以BackBuffer中尚未生成完毕，则显示器继续扫描旧帧，所以旧帧被扫描了两次，导致卡顿，这一次扫描结束后，BackBuffer中的数据就已经准备好了，垂直同步信号发送后，交换FrameBuffer与BackBuffer，这样就可以扫描新的一帧。
+
+```
+     A           A            B
++-----------+-----------+----------->
+0           8.3ms      16.6ms
+```
+
+所以卡顿并不能根治，只能优化。
+
+#### Android帧渲染流程
+
+ 1. (CPU) App的UI线程处理输入事件，调用应用回调，执行Measure, Layout, Draw更新视图层次结构中记录的绘图命令列表；
+ 2. (CPU) App的RenderThread负责将记录的命令发送到GPU；
+ 3. (GPU) GPU绘制这一帧；
+ 4. (SurfaceFlinger) SurfaceFlinger组合屏幕应该最终显示出的内容，并将画面提交给屏幕的硬件抽象层（HAL）;
+ 5. 屏幕最终呈现该帧的内容。
+
+这个过程由基于VSYNC的Choreographer控制。
+
+#### FrameBuffer + BackBuffer(CPU+GPU) + VSYNC
+
+从上述*Android帧渲染流程*中可以知道，CPU->GPU->SF是串行工作的，而它们和显示器是并行工作的。除了由于帧率<屏幕刷新率而发生的卡顿，
+帧率==屏幕刷新率也可能发生卡顿(并没有在一帧限定的渲染的时间范围内完成)：
+
+```     VSYNC     VSYNC     VSYNC     VSYNC     VSYNC     VSYNC               
+Display   |    A    |    A    |    B    |    B    |    C    |     
+GPU           |     B     |           |  C  |
+CPU       | B |               |   C   |
+          ---------------------------------------------------->
+```
+
+在显示器从FrameBuffer中扫描A帧的同时开始生产B帧，但是在GPU绘制B帧消耗的时间过长，导致超过了屏幕的同步周期，导致A帧再次被扫描，从而发生卡顿；当显示开始扫描B帧的同时开始生产C帧，但是由于在CPU上消耗的时间过长导致留给GPU绘制的时间不够，导致C帧也无法在显示器同步周期内生产出来从而继续显示B帧，又引发了卡顿。
+
+#### FrameBuffer + BackBuffer(GPU) + BackBuffer(CPU) + VSYNC
+
+优化上述卡顿可以使用Triple Buffer：GPU和CPU拥有自己的Buffer。
+
+```     VSYNC     VSYNC     VSYNC     VSYNC     VSYNC     VSYNC     VSYNC              
+Display   |    A    |    A    |    B    |    C    |    D    |    E    |       
+GPU           |     B     | |   C   | D |   |    E    |
+CPU       | B |     |   C   | |  D  |   | E |
+          ----------------------------------------------------------------->
+```
+
+可以看到在第二个垂直同步点，即使B帧在GPU上尚未生成，但并不影响C帧在CPU上的计算，因为它们各自使用独立的Buffer，这样C帧就不需要等下一个垂直同步信号（第三个）。
+
+即使Triple Buffer可以极大的减少卡顿，但我们重点应该放在CPU层，减少在这个层所消耗的时间，比如减少View的嵌套，避免UI线程的阻塞等方案。
+
+
+#### Choreographer
+
+TODO
+
+
+##### 帧渲染时间检测
+
+```kotlin
+    private fun calcCostTimeMillisPerFrame(intendedCostTimeMillisPerFrame: Float) {
+        Choreographer.getInstance().postFrameCallback(
+            MyFrameCallback(
+                intendedCostTimeMillisPerFrame = intendedCostTimeMillisPerFrame,
+                start = -1L
+            )
+        )
+    }
+
+    private inner class MyFrameCallback(
+        private val intendedCostTimeMillisPerFrame: Float,
+        private var start: Long = -1
+    ) : Choreographer.FrameCallback {
+
+        override fun doFrame(frameTimeNanos: Long) {
+            start = if (start == -1L) {
+                frameTimeNanos
+            } else {
+                // calc
+                val realCostTimeMillisPerFrame = (frameTimeNanos - start) / 1000_000F
+
+                frameTimeNanos
+            }
+            Choreographer.getInstance().postFrameCallback(this)
+        }
+    }
+```
