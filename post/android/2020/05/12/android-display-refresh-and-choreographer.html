@@ -45,38 +45,50 @@
 
 <h4 id="帧率fps">帧率（FPS）</h4>
 
-<p>帧率是指数据处理器每秒合成的帧数，单位是FPS（Frames Per Seconds）。比如我们在一秒内滑动了一屏，则这一秒内一共生成了N（N&gt;0）个帧；再比如我们浏览一个静态页面的时候，这时候我显示器一直显示的是缓存中旧的帧，所以在这期间没有新的帧生成。所以帧率是动态的。</p>
+<p>帧率是指帧处理器每秒合成的帧数，单位是FPS（Frames Per Seconds）。比如我们在一秒内滑动了一屏，则这一秒内一共生成了N（N&gt;0）个帧；再比如我们浏览一个静态页面的时候，这时候我显示器一直显示的是缓存中旧的帧，所以在这期间没有新的帧生成。所以帧率是动态的。</p>
 
-<h4 id="framebuffer">FrameBuffer</h4>
+<h4 id="屏幕刷新总揽">屏幕刷新总揽</h4>
 
-<p>FrameBuffer表示帧缓冲，其消费端来自显示器，而生产端来自数据处理器（CPU,GPU, Surface Flinger）。数据处理器生产一帧的数据到FrameBuffer上，然后显示器从FrameBuffer从上到下逐行扫描到屏幕上，扫描完成后发送垂直同步信号（VSYNC）开始新一轮场扫描，如此循环，这就是显示器的基本原理。</p>
+<p>FrameBuffer表示帧缓冲，存放着帧数据，其消费端来自显示器，而生产端来自帧处理器（CPU,GPU, Surface Flinger）。当显示器从FrameBuffer逐行扫描完一帧数据并渲染完成后，显示器将会开始新一轮的扫描。如果此时帧处理器正好将下一帧数据写入到FrameBuffer，那显示器就会正常扫描这新一帧的数据并渲染出来，如此循环，显示器就能播放一个连续的画面。</p>
+
+<p>但这是理想的情况：新的一帧写入FrameBuffer的时机必须恰到好处，不能早于显示器扫描并渲染完一帧的时间点，否则就会导致正在扫描的一帧数据的一部分被新的一帧的一部分所更新，导致显示出来的一帧画面来自不同的两帧数据，<strong>引发画面撕裂</strong>；同样的也不能晚于显示器扫描并渲染完一帧的时间点，否则就会由于没有可用的新帧，导致显示器重复绘制上一帧，画面静止，<strong>引发画面卡顿</strong>。由此可见，帧处理器与显示器的协同很重要。</p>
 
 <h4 id="撕裂">撕裂</h4>
 
-<p>起因：假设此时帧率&gt;屏幕刷新率（帧率=120FPS，屏幕刷新率=60Hz），则数据处理器生成一帧只需要8.3（1000/120）ms，而显示器扫描完一场需要16.6（1000/60）ms，假如显示器开始场扫描的时候同时数据处理器开始生产帧，在只有一个FrameBuffer的情况下，当显示器扫描到一半的时候，数据处理器已经生成了一个新的帧并更新到FrameBuffer，所以此时显示器开始扫描的另一半帧并不是上一个旧帧，而是新生成的帧的另一半，这就导致这一场扫描出来的画面是两个帧的组合，导致画面撕裂。</p>
+<p>起因：假设此时帧率&gt;屏幕刷新率（帧率=120FPS，屏幕刷新率=60Hz），则帧处理器生成一帧只需要8.3（1000/120）ms，而显示器扫描完一场需要16.6（1000/60）ms，假如显示器开始场扫描的时候同时帧处理器开始生产帧，在只有一个FrameBuffer的情况下，当显示器扫描到一半的时候，数据处理器已经生成了一个新的帧并更新到FrameBuffer，所以此时显示器开始扫描的另一半帧并不是上一个旧帧，而是新生成的帧的另一半，这就导致这一场扫描出来的画面是两个帧的组合，导致画面撕裂。</p>
 
 <p>解决：导致画面撕裂的根本原因是FrameBuffer的数据在显示器尚未扫描完就被更新了，所以解决方案就是将数据处理器生成的帧存放在另一个缓冲-BackBuffer，则显示器继续从FrameBuffer读取数据，在未来一个合适的时机，交换FrameBuffer和BackBufer的数据（可以将这个过程看作瞬间完成），这样显示器就会扫描新一帧的数据。但这个合适的时机是什么呢？</p>
 
 <ul>
-  <li>假设是BackBuffer写完一帧数据后交换FrameBuffer和BackBuffer，那也有可能发生撕裂。</li>
-  <li>假设是显示器从FrameBuffer扫描完这一场数据，发送垂直同步信号，如果BackBuffer已经写完一帧数据，则交换FrameBuffer和BackBuffer。</li>
+  <li>
+    <p>假设是BackBuffer写完一帧数据后交换FrameBuffer和BackBuffer，如果帧处理器生成一帧的时间早于显示器扫描并渲染完一帧的时间，则也有会发生撕裂。</p>
+  </li>
+  <li>
+    <p>假设是显示器从FrameBuffer扫描并渲染完这一帧数据后，即将开始扫描并渲染下一帧之前，发送垂直同步信号，如果帧处理器生成一帧的时间早于显示器扫描并渲染完一帧的时间，那也就意味着此时BackBuffer已经有一帧新的数据等待交换，当收到垂直同步信号后，交换FrameBuffer和BackBuffer，显示器开始扫描并渲染这新的一帧。于此同时，帧处理器开始准备生产新的一帧数据，如此循环。</p>
+  </li>
 </ul>
 
-<p>可见后者才是解决方案，则VSYNC+Double Buffer是解决撕裂的方案。</p>
+<p>我们继续讨论以下VSYNC和Double Buffer：</p>
+
+<h5 id="vsync--framebuffer">VSYNC + FrameBuffer</h5>
+
+<p>此时显示器和帧处理器共用一个FrameBuffer并且使用VSYNC协调工作。假设此时显示器正在从FrameBuffer扫描并渲染帧数据，那在显示器未完成工作前，帧处理器是无法获得FrameBuffer的所有权而工作的，所以此时帧处理器只有等待显示器完成工作。当显示器终于完成帧的扫描与渲染，在开始下一帧的工作前发送垂直同步信号，帧处理器收到信号后开始生产帧，如果在开始扫描渲染帧的时候，新的一帧尚未准备好，那显示器还是显示的上一帧的数据，导致卡顿。这种帧处理先生产，显示器后渲染的模式非常类似于生产者消费者模型。所以单缓冲的情况下，显示器和帧处理器需要排队使用FrameBuffer，不能同时工作，提高效率，VSYNC的存在就是保证FrameBuffer的访问安全，这样可以有效的防止画面撕裂。</p>
+
+<p>可见即使没有BackBuffer，VSYNC也可以防止画面撕裂，所以VSYNC才是解决画面撕裂的根本方案。</p>
+
+<p><img src="https://nikeo.cn/static/images/2020-05-12-android-display-refresh-and-choreographer-img1.png" alt="" /></p>
+
+<p>和JAVA中同步锁一样，虽然保证了线程安全，但是降低了效率。对应到显示器，就是避免了撕裂，增加了卡顿率，而BackBuffer的出现可以保证在显示器扫描渲染帧的同时帧处理去生产新的帧，这样提高了在显示器扫描并渲染完一帧后，能够有新的一帧去扫描和渲染的机率，注意，只是提高机率，并无法根治。</p>
+
+<p><img src="https://nikeo.cn/static/images/2020-05-12-android-display-refresh-and-choreographer-img2.png" alt="" /></p>
 
 <h4 id="卡顿">卡顿</h4>
 
-<p>卡顿主要是由于在显示器正常的同步周期内，没有可用的新帧，导致重复扫描旧的帧，单缓冲下情况更糟，双缓冲有很大的改善，因为数据处理器可以在显示器开始扫描的时候生产新的帧，但是如果在扫描完成后如果新的帧依旧没有在BackBuffer中生成，则依旧会卡顿。</p>
+<p>卡顿主要是由于在显示器正常的同步周期内，没有可用的新帧，导致重复显示上一帧，单缓冲下情况更糟，双缓冲有很大的改善，因为在双缓冲情况下帧处理器可以在显示器开始扫描并渲染帧的时候生产新的帧，这样提高了单位时间新帧的生产率，但是如果在开始扫描新帧的时候依旧没有新帧在BackBuffer中生成，则依旧会卡顿。</p>
 
-<p>假设此时帧率&lt;屏幕刷新率（帧率=60FPS，屏幕刷新率=120Hz），则数据处理器生成一帧需要16.6（1000/60）ms，而显示器扫描完一场只需要8.3（1000/120）ms，假如FrameBuffer已经有一帧的数据，显示器开始场扫描的时候同时数据处理器开始生产帧，8.3ms后扫描完毕，发生垂直同步信息开始扫描下一帧，但是数据处理器距离一帧生成还需要8.3ms，所以BackBuffer中尚未生成完毕，则显示器继续扫描旧帧，所以旧帧被扫描了两次，导致卡顿，这一次扫描结束后，BackBuffer中的数据就已经准备好了，垂直同步信号发送后，交换FrameBuffer与BackBuffer，这样就可以扫描新的一帧。</p>
+<p>假设此时帧率&lt;屏幕刷新率（帧率=60FPS，屏幕刷新率=120Hz），则帧处理器生成一帧需要16.6（1000/60）ms，而显示器扫描完一场只需要8.3（1000/120）ms，假如FrameBuffer已经有一帧的数据，显示器开始场扫描的时候同时帧处理器开始生产帧，8.3ms后扫描完毕，发生垂直同步信息开始扫描下一帧，但是帧处理器距离一帧生成还需要8.3ms，所以BackBuffer中尚未生成完毕，则显示器继续显示旧帧，导致卡顿，这一次扫描结束后，BackBuffer中的帧数据就已经准备好了，垂直同步信号发送后，交换FrameBuffer与BackBuffer，这样就可以扫描新的一帧。</p>
 
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-</pre></td><td class="rouge-code"><pre>     A           A            B
-+-----------+-----------+-----------&gt;
-0           8.3ms      16.6ms
-</pre></td></tr></tbody></table></code></pre></div></div>
+<p><img src="https://nikeo.cn/static/images/2020-05-12-android-display-refresh-and-choreographer-img3.png" alt="" /></p>
 
 <p>所以卡顿并不能根治，只能优化。</p>
 
@@ -97,48 +109,32 @@
 <p>从上述<em>Android帧渲染流程</em>中可以知道，CPU-&gt;GPU-&gt;SF是串行工作的，而它们和显示器是并行工作的。除了由于帧率&lt;屏幕刷新率而发生的卡顿，
 帧率==屏幕刷新率也可能发生卡顿(并没有在一帧限定的渲染的时间范围内完成)：</p>
 
-<p>```     VSYNC     VSYNC     VSYNC     VSYNC     VSYNC     VSYNC             <br />
-Display   |    A    |    A    |    B    |    B    |    C    |   <br />
-GPU           |     B     |           |  C  |
-CPU       | B |               |   C   |
-          —————————————————-&gt;</p>
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-</pre></td><td class="rouge-code"><pre>
-在显示器从FrameBuffer中扫描A帧的同时开始生产B帧，但是在GPU绘制B帧消耗的时间过长，导致超过了屏幕的同步周期，导致A帧再次被扫描，从而发生卡顿；当显示开始扫描B帧的同时开始生产C帧，但是由于在CPU上消耗的时间过长导致留给GPU绘制的时间不够，导致C帧也无法在显示器同步周期内生产出来从而继续显示B帧，又引发了卡顿。
+<p><img src="https://nikeo.cn/static/images/2020-05-12-android-display-refresh-and-choreographer-img4.png" alt="" /></p>
 
-#### FrameBuffer + BackBuffer(GPU) + BackBuffer(CPU) + VSYNC
+<p>在显示器从FrameBuffer中扫描B帧的同时帧处理器开始生产C帧，但是在CPU部分消耗的时间过长，导致超过了屏幕的同步周期，导致B帧被重复显示，从而发生卡顿；当显示开始扫描C帧的同时帧处理器开始生产D帧，但是由于GPU绘制D帧时间过长导致超过了屏幕的同步周期，导致D帧也无法在显示器同步周期内生产出来从而继续显示C帧，又引发了卡顿。</p>
 
-优化上述卡顿可以使用Triple Buffer：GPU和CPU拥有自己的Buffer。
+<h4 id="framebuffer--backbuffergpu--backbuffercpu--vsync">FrameBuffer + BackBuffer(GPU) + BackBuffer(CPU) + VSYNC</h4>
 
-```     VSYNC     VSYNC     VSYNC     VSYNC     VSYNC     VSYNC     VSYNC              
-Display   |    A    |    A    |    B    |    C    |    D    |    E    |       
-GPU           |     B     | |   C   | D |   |    E    |
-CPU       | B |     |   C   | |  D  |   | E |
-          -----------------------------------------------------------------&gt;
-</pre></td></tr></tbody></table></code></pre></div></div>
+<p>优化上述卡顿可以使用Triple Buffer：GPU和CPU拥有自己的Buffer。</p>
 
-<p>可以看到在第二个垂直同步点，即使B帧在GPU上尚未生成，但并不影响C帧在CPU上的计算，因为它们各自使用独立的Buffer，这样C帧就不需要等下一个垂直同步信号（第三个）。</p>
+<p><img src="https://nikeo.cn/static/images/2020-05-12-android-display-refresh-and-choreographer-img5.png" alt="" /></p>
+
+<p>可以看到在第三个垂直同步点，即使C帧尚未生成，但并不影响D帧在CPU上的计算，因为它们各自使用独立的Buffer，这样D帧就不需要等下一个垂直同步信号（第四个）。</p>
 
 <p>即使Triple Buffer可以极大的减少卡顿，但我们重点应该放在CPU层，减少在这个层所消耗的时间，比如减少View的嵌套，避免UI线程的阻塞等方案。</p>
 
 <h4 id="choreographer">Choreographer</h4>
 
-<p>TODO</p>
+<ul>
+  <li>Android 3.0 引入了硬件加速（GPU）;</li>
+  <li>Android 4.0 默认开启了硬件加速；</li>
+  <li>Android 4.1 开始黄油计划，上层Choreographer开始介绍垂直同步信号（VSYNC），引入了三缓冲；</li>
+  <li>VSYNC不但控制FrameBuffer和BackBuffer的交换，还控制帧处理器何时开始计算新的帧。</li>
+</ul>
 
-<h5 id="帧渲染时间检测">帧渲染时间检测</h5>
+<p>Choreographer是基于VSYNC的。我们通常开始进行Measure-&gt;Layout-&gt;Draw或invalidate的前提是接受到VSYNC后。</p>
 
-<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
 2
 3
 4
@@ -164,27 +160,113 @@ CPU       | B |     |   C   | |  D  |   | E |
 24
 25
 26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+</pre></td><td class="rouge-code"><pre><span class="c1">// android.view.ViewRootImpl.java</span>
+
+<span class="kn">package</span> <span class="nn">android.view</span><span class="o">;</span>
+
+<span class="kd">public</span> <span class="kd">final</span> <span class="kd">class</span> <span class="nc">ViewRootImpl</span> <span class="kd">implements</span> <span class="nc">ViewParent</span><span class="o">,</span>
+        <span class="nc">View</span><span class="o">.</span><span class="na">AttachInfo</span><span class="o">.</span><span class="na">Callbacks</span><span class="o">,</span> <span class="nc">ThreadedRenderer</span><span class="o">.</span><span class="na">DrawCallbacks</span> <span class="o">{</span>
+
+    <span class="kd">final</span> <span class="kd">class</span> <span class="nc">TraversalRunnable</span> <span class="kd">implements</span> <span class="nc">Runnable</span> <span class="o">{</span>
+        <span class="nd">@Override</span>
+        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">run</span><span class="o">()</span> <span class="o">{</span>
+            <span class="n">doTraversal</span><span class="o">();</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="kd">final</span> <span class="nc">TraversalRunnable</span> <span class="n">mTraversalRunnable</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">TraversalRunnable</span><span class="o">();</span>
+
+    <span class="nd">@UnsupportedAppUsage</span>
+    <span class="kt">void</span> <span class="nf">scheduleTraversals</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(!</span><span class="n">mTraversalScheduled</span><span class="o">)</span> <span class="o">{</span>
+            <span class="n">mTraversalScheduled</span> <span class="o">=</span> <span class="kc">true</span><span class="o">;</span>
+            <span class="n">mTraversalBarrier</span> <span class="o">=</span> <span class="n">mHandler</span><span class="o">.</span><span class="na">getLooper</span><span class="o">().</span><span class="na">getQueue</span><span class="o">().</span><span class="na">postSyncBarrier</span><span class="o">();</span>
+            <span class="n">mChoreographer</span><span class="o">.</span><span class="na">postCallback</span><span class="o">(</span>
+                    <span class="nc">Choreographer</span><span class="o">.</span><span class="na">CALLBACK_TRAVERSAL</span><span class="o">,</span> <span class="n">mTraversalRunnable</span><span class="o">,</span> <span class="kc">null</span><span class="o">);</span>
+            <span class="n">notifyRendererOfFramePending</span><span class="o">();</span>
+            <span class="n">pokeDrawLockIfNeeded</span><span class="o">();</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="kt">void</span> <span class="nf">doTraversal</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">mTraversalScheduled</span><span class="o">)</span> <span class="o">{</span>
+            <span class="n">mTraversalScheduled</span> <span class="o">=</span> <span class="kc">false</span><span class="o">;</span>
+            <span class="n">mHandler</span><span class="o">.</span><span class="na">getLooper</span><span class="o">().</span><span class="na">getQueue</span><span class="o">().</span><span class="na">removeSyncBarrier</span><span class="o">(</span><span class="n">mTraversalBarrier</span><span class="o">);</span>
+
+            <span class="k">if</span> <span class="o">(</span><span class="n">mProfile</span><span class="o">)</span> <span class="o">{</span>
+                <span class="nc">Debug</span><span class="o">.</span><span class="na">startMethodTracing</span><span class="o">(</span><span class="s">"ViewAncestor"</span><span class="o">);</span>
+            <span class="o">}</span>
+
+            <span class="n">performTraversals</span><span class="o">();</span>
+
+            <span class="k">if</span> <span class="o">(</span><span class="n">mProfile</span><span class="o">)</span> <span class="o">{</span>
+                <span class="nc">Debug</span><span class="o">.</span><span class="na">stopMethodTracing</span><span class="o">();</span>
+                <span class="n">mProfile</span> <span class="o">=</span> <span class="kc">false</span><span class="o">;</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</pre></td></tr></tbody></table></code></pre></div></div>
+
+<p>通常我们通过<code class="language-plaintext highlighter-rouge">mDisplayEventReceiver#scheduleVsync()</code>去请求下一个垂直同步信号，当显示器开始扫描并渲染下一帧的时候，会回调<code class="language-plaintext highlighter-rouge">mDisplayEventReceiver</code>的<code class="language-plaintext highlighter-rouge">onVsync(long timestampNanos, long physicalDisplayId, int frame)</code>，然后调度到主线程，然后执行<code class="language-plaintext highlighter-rouge">doFrame（）</code>，如果主线程阻塞了一些时间，则有可能丢帧，然后按顺序执行：CALLBACK_INPUT-&gt;CALLBACK_ANIMATION-&gt;CALLBACK_INSETS_ANIMATION-&gt;CALLBACK_TRAVERSAL-&gt;CALLBACK_COMMIT，其中CALLBACK_TRAVERSAL就是视图层级的Measure-&gt;Layout-&gt;Draw。所以这部分是上层开发者唯一所能控制的帧渲染，我们需要尽量减少这部分所消耗的时间。</p>
+
+<p>我们通常使用Choreographer来监控生成的每一帧所消耗的时间，从而得知是否超过屏幕的同步周期，检测卡顿。</p>
+
+<h5 id="帧生成时间检测">帧生成时间检测</h5>
+
+<div class="language-kotlin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><table class="rouge-table"><tbody><tr><td class="rouge-gutter gl"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
 </pre></td><td class="rouge-code"><pre>    <span class="k">private</span> <span class="k">fun</span> <span class="nf">calcCostTimeMillisPerFrame</span><span class="p">(</span><span class="n">intendedCostTimeMillisPerFrame</span><span class="p">:</span> <span class="nc">Float</span><span class="p">)</span> <span class="p">{</span>
         <span class="nc">Choreographer</span><span class="p">.</span><span class="nf">getInstance</span><span class="p">().</span><span class="nf">postFrameCallback</span><span class="p">(</span>
-            <span class="nc">MyFrameCallback</span><span class="p">(</span>
-                <span class="n">intendedCostTimeMillisPerFrame</span> <span class="p">=</span> <span class="n">intendedCostTimeMillisPerFrame</span><span class="p">,</span>
-                <span class="n">start</span> <span class="p">=</span> <span class="p">-</span><span class="mi">1L</span>
-            <span class="p">)</span>
+            <span class="nc">MyFrameCallback</span><span class="p">(</span><span class="n">last</span> <span class="p">=</span> <span class="p">-</span><span class="mi">1L</span><span class="p">)</span>
         <span class="p">)</span>
     <span class="p">}</span>
 
-    <span class="k">private</span> <span class="k">inner</span> <span class="kd">class</span> <span class="nc">MyFrameCallback</span><span class="p">(</span>
-        <span class="k">private</span> <span class="kd">val</span> <span class="py">intendedCostTimeMillisPerFrame</span><span class="p">:</span> <span class="nc">Float</span><span class="p">,</span>
-        <span class="k">private</span> <span class="kd">var</span> <span class="py">start</span><span class="p">:</span> <span class="nc">Long</span> <span class="p">=</span> <span class="p">-</span><span class="mi">1</span>
-    <span class="p">)</span> <span class="p">:</span> <span class="nc">Choreographer</span><span class="p">.</span><span class="nc">FrameCallback</span> <span class="p">{</span>
+    <span class="k">private</span> <span class="k">inner</span> <span class="kd">class</span> <span class="nc">MyFrameCallback</span><span class="p">(</span><span class="k">private</span> <span class="kd">var</span> <span class="py">last</span><span class="p">:</span> <span class="nc">Long</span> <span class="p">=</span> <span class="p">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">:</span> <span class="nc">Choreographer</span><span class="p">.</span><span class="nc">FrameCallback</span> <span class="p">{</span>
 
         <span class="k">override</span> <span class="k">fun</span> <span class="nf">doFrame</span><span class="p">(</span><span class="n">frameTimeNanos</span><span class="p">:</span> <span class="nc">Long</span><span class="p">)</span> <span class="p">{</span>
-            <span class="n">start</span> <span class="p">=</span> <span class="k">if</span> <span class="p">(</span><span class="n">start</span> <span class="p">==</span> <span class="p">-</span><span class="mi">1L</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">last</span> <span class="p">=</span> <span class="k">if</span> <span class="p">(</span><span class="n">last</span> <span class="p">==</span> <span class="p">-</span><span class="mi">1L</span><span class="p">)</span> <span class="p">{</span>
                 <span class="n">frameTimeNanos</span>
             <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
                 <span class="c1">// calc</span>
-                <span class="kd">val</span> <span class="py">realCostTimeMillisPerFrame</span> <span class="p">=</span> <span class="p">(</span><span class="n">frameTimeNanos</span> <span class="p">-</span> <span class="n">start</span><span class="p">)</span> <span class="p">/</span> <span class="mf">1000_000F</span>
-
+                <span class="kd">val</span> <span class="py">realCostTimeMillisPerFrame</span> <span class="p">=</span> <span class="p">(</span><span class="n">frameTimeNanos</span> <span class="p">-</span> <span class="n">last</span><span class="p">)</span> <span class="p">/</span> <span class="mf">1000_000F</span>
                 <span class="n">frameTimeNanos</span>
             <span class="p">}</span>
             <span class="nc">Choreographer</span><span class="p">.</span><span class="nf">getInstance</span><span class="p">().</span><span class="nf">postFrameCallback</span><span class="p">(</span><span class="k">this</span><span class="p">)</span>
