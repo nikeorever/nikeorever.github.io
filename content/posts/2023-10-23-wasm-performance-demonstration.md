@@ -11,13 +11,13 @@ series = []
 disableComments = true
 draft = false
 +++
-{{< html >}}
+{{< wasm_performance_demonstration >}}
 <div>
     <h5 id="title"></h3>
     <table id="table"></table>
     <button id="btn">(请在所有计算执行完毕后点击)Rust通过Wasm调用JavaScript的alert方法</button>
 </div>
-{{< /html >}}
+{{< /wasm_performance_demonstration >}}
 
 #### Link
 
