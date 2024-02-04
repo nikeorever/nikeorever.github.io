@@ -1,6 +1,6 @@
 +++
 authors = ["Lenox"]
-title = "静态库和共享库"
+title = "C语言中的静态库和共享库"
 date = "2024-01-25"
 description = ""
 tags = [
@@ -14,8 +14,6 @@ series = []
 disableComments = true
 draft = false
 +++
-
-> 这篇文章主要讨论一下C中的静态库和共享库
 
 ```bash
 .
@@ -211,7 +209,7 @@ cd main/
 1 directory, 1 file
 ```
 
-链接静态库
+编译可执行文件并链接静态库
 
 ```bash
 gcc -o main main.c -L ../shapes/ -l shapes -I ../shapes/include/
@@ -259,7 +257,7 @@ cd main/
 1 directory, 1 file
 ```
 
-链接动态库
+编译可执行文件并链接动态库
 
 ```bash
 gcc -o main main.c -L ../shapes/ -l shapes -I ../shapes/include/
@@ -279,8 +277,23 @@ gcc -o main main.c -L ../shapes/ -l shapes -I ../shapes/include/
 export LD_LIBRARY_PATH=../shapes/
 ```
 
-{{< notice warning >}}
-TODO: 添加动态链接库的搜索路径的方式
+{{< notice info >}}
+也可以在编译可执行文件的时候通过 `-Wl,-rpath` 参数直接指定运行库路径，这样就不需要额外添加动态链接库的搜索路径
+
+```bash
+gcc -o main main.c -I ../shapes/include/ -Wl,-rpath, ../shapes/libshapes.so
+```
+
+查看可执行文件的动态链接库依赖关系以及它们的搜索路径
+
+```diff
+ $ ldd ./main
+     linux-vdso.so.1 (0x00007ffd778ab000)
++    ../shapes/libshapes.so (0x00007f1526be8000)
+     libc.so.6 => /lib64/libc.so.6 (0x00007f15269f1000)
+     /lib64/ld-linux-x86-64.so.2 (0x00007f1526bef000)
+```
+
 {{< /notice >}}
 
 运行可执行文件
@@ -354,7 +367,9 @@ Circle Perimeter: 25.132741
     151250:
 ```
 
-## 当同名的动态链接库和静态连接库在同一目录时，会优先链接哪个？
+{{< notice question >}}
+当同名的动态链接库和静态连接库在同一目录时，会优先链接哪个？
+{{< /notice >}}
 
 进入平面图形计算库根路径
 
@@ -411,6 +426,6 @@ gcc -o main main.c -L ../shapes/ -l shapes -I ../shapes/include/
      /lib64/ld-linux-x86-64.so.2 (0x00007f7350c1b000)
 ```
 
-{{< notice tip >}}
+{{< notice note >}}
 优先链接动态链接库
 {{< /notice >}}
