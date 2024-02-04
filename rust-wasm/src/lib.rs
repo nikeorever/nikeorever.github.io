@@ -15,7 +15,7 @@ pub fn fib(nth: i32) -> i32 {
     if nth < 2 {
         return nth;
     }
-    return fib(nth - 1) + fib(nth - 2);
+    fib(nth - 1) + fib(nth - 2)
 }
 
 
